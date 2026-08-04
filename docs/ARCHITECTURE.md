@@ -1,0 +1,63 @@
+# Architecture Notes
+
+## Data flow
+
+```
+ file input          signature pad / PNG upload
+     │                        │
+     ▼                        ▼
+ originalBytes (ArrayBuffer)  signatureDataUrl (PNG, transparent)
+     │                        │
+     ├─ copy ──► pdf.js ──► page canvases (display only)
+     │                        │
+     │              placements[] { pageIndex, x, y, w, h }  (CSS px)
+     │                        │
+     └────────────► pdf-lib ◄─┘
+                      │   embedPng + drawImage (PDF points)
+                      ▼
+                signed.pdf (Blob download)
+```
+
+Two libraries, two jobs, deliberately separated:
+
+- **pdf.js** only *displays*. Its canvases are throwaway pixels; nothing is ever read back from them.
+- **pdf-lib** only *composes*. It re-opens the **original bytes** and draws the signature as a real PDF image XObject. Because we never rasterize the document itself, text stays selectable and the output stays small and crisp — this is also why the tool avoids renderer-specific bugs like iOS Markup's color glitches: the exported file contains a plain, standards-conforming image draw.
+
+State lives in `App.tsx` and is plain serializable data (`ArrayBuffer`, data URL string, `Placement[]`). Components are views over it.
+
+## The two coordinate systems
+
+This is the only genuinely tricky code in the project.
+
+| | Screen (overlay) | PDF (pdf-lib) |
+|---|---|---|
+| Unit | CSS pixel | point (1/72 inch) |
+| Origin | top-left of page canvas | bottom-left of page |
+| Y direction | down | up |
+| `drawImage` y refers to | image top (CSS `top`) | image **bottom** edge |
+
+A page rendered at `scale` maps `1 pt → scale px`. So for a placement `(x, y, w, h)` in CSS pixels on a page that is `H` points tall:
+
+```
+pdfX = x / scale
+pdfW = w / scale
+pdfH = h / scale
+pdfY = H − y/scale − pdfH     // flip the axis, then step down by the image height
+```
+
+Keep this in one pure function in `src/lib/coords.ts` and unit-test it mentally with the four corners:
+
+- top-left placement `(0, 0)` → `pdfY = H − pdfH` ✓ (near the top in PDF space)
+- bottom-left placement `(0, canvasHeight − h)` → `pdfY = 0` ✓
+
+### Gotchas
+
+- **Per-page scale.** If pages have different sizes, each has its own `scale`. Store it alongside the rendered canvas, never as a single global.
+- **CSS px vs device px.** Do the math in CSS pixels (what react-rnd reports). If you render pdf.js canvases at `devicePixelRatio` for sharpness, that only changes `canvas.width` vs its CSS width — your `scale` must be based on the **CSS** width.
+- **Detached ArrayBuffer.** pdf.js may transfer the buffer to its worker. Hand pdf.js a copy (`bytes.slice(0)`) and keep the original for pdf-lib.
+- **Rotated pages.** `/Rotate 90/180/270` changes what "up" means. pdf.js viewports bake rotation in; pdf-lib's `drawImage` does not. MVP: detect `page.getRotation()` and warn; full support means remapping x/y per rotation case and passing `rotate:` to `drawImage`.
+- **Encrypted PDFs.** `PDFDocument.load` throws on encrypted files (`{ ignoreEncryption: true }` exists but output may be broken). Catch and tell the user.
+
+## Why no backend
+
+Everything — parse, render, compose, save — runs on typed arrays in the browser. A backend only becomes necessary for multi-party workflows (shared state) or archives (storage). If added later, the front end stays unchanged; the export step would just also `POST` the bytes.
