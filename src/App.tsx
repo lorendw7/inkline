@@ -1,122 +1,78 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import type { ChangeEvent } from 'react'
+import type { PDFDocumentProxy } from 'pdfjs-dist'
+import { loadPdf } from './lib/pdf'
+import { PdfPage } from './components/PdfPage'
 
+
+
+/**
+ * Every page is rendered at this width in CSS pixels, so a single constant
+ * fixes the scale for the whole document. Milestone 4 converts overlay
+ * coordinates back into PDF points using the same number.
+ */
+const DISPLAY_WIDTH = 800
+
+/**
+ * Owns all app state as plain, serializable data; everything below is a view
+ * over it. See docs/ARCHITECTURE.md.
+ */
 function App() {
-  const [count, setCount] = useState(0)
+  // null until the user picks a file
+  const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
+
+  const [fileName, setFileName] = useState<string | null>(null);
+
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return; // the dialog was opened and cancelled
+
+    const bytes = await file.arrayBuffer();
+    const doc = await loadPdf(bytes);
+
+    // Storing the document re-renders App, which mounts one PdfPage per page.
+    setPdfDoc(doc);
+    setFileName(file.name);
+  }
+
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="min-h-screen bg-neutral-100">
+      <header className='sticky top-0 z-10
+      flex items-center gap-4 border-b border-neutral-200 bg-white px-6 py-3'>
+        <h1 className="text-lg font-semibold">
+          Inkline
+        </h1>
 
-      <div className="ticks"></div>
+        {/* A label forwards clicks to the input it wraps, so the unstylable
+            native file input can stay visually hidden while this styled label
+            acts as the button. `sr-only` rather than `hidden` keeps the input
+            reachable by keyboard, and `focus-within` shows its focus ring here. */}
+        <label className="inline-flex cursor-pointer items-center rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-700 focus-within:ring-2 focus-within:ring-neutral-400">
+          Open PDF
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={handleFileChange}
+            className="sr-only"
+          />
+        </label>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+        {fileName && <span className="text-sm text-neutral-500">{fileName}</span>}
+      </header>
+      <div className='flex flex-col items-center gap-6 p-8'>
+        {/* Nothing renders before a document is loaded: `null && ...` is null,
+            and React renders null as nothing. */}
+        {
+          pdfDoc &&
+          Array.from({ length: pdfDoc.numPages }, (_, index) => (
+            <PdfPage key={index} pageNumber={index + 1} pdfDoc={pdfDoc} displayWidth={DISPLAY_WIDTH} />
+          ))
+        }
+      </div>
+    </div>
   )
 }
 
-export default App
+export default App;
