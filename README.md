@@ -2,6 +2,8 @@
 
 A browser-based PDF signing tool. Upload a PDF, draw or upload your signature, drag and resize it into position, and export a flattened, signed PDF — entirely client-side. No server, no upload of your documents, and none of the color-rendering bugs that iOS Markup is known for.
 
+**Live: [lorendw7.github.io/inkline](https://lorendw7.github.io/inkline/)**
+
 ## Features (MVP)
 
 - **Upload a PDF** and preview every page in the browser
@@ -35,10 +37,17 @@ Then open the printed localhost URL.
 
 Other scripts: `npm run build` (type-check + production build), `npm run lint`, `npm run preview`.
 
+## Deployment
+
+Pushing to `main` builds the site and publishes it to GitHub Pages via
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml). Because the site
+is served from a repository subpath, `vite.config.ts` sets `base: '/inkline/'` —
+without it every asset URL would 404. The build output is never committed.
+
 ## Project Status
 
 - [x] **Milestone 0 — Scaffold**: Vite + React + TypeScript + Tailwind v4, all core libraries installed
-- [ ] **Milestone 1 — PDF rendering**: load a file and render every page to canvas with pdf.js
+- [x] **Milestone 1 — PDF rendering**: load a file and render every page to canvas with pdf.js, at device pixel density
 - [ ] **Milestone 2 — Signature pad**: draw/upload a transparent-PNG signature
 - [ ] **Milestone 3 — Placement**: drag & resize the signature overlay with react-rnd
 - [ ] **Milestone 4 — Export**: compose and download the signed PDF with pdf-lib

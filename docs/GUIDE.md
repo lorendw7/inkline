@@ -27,7 +27,10 @@ npm install -D tailwindcss @tailwindcss/vite
 **Key APIs:**
 - `<input type="file" accept="application/pdf">` → `file.arrayBuffer()`
 - `pdfjs-dist`: `getDocument({ data }).promise` → `PDFDocumentProxy`
-- `pdf.getPage(n)` → `page.getViewport({ scale })` → `page.render({ canvasContext, viewport }).promise`
+- `pdf.getPage(n)` → `page.getViewport({ scale })` → `page.render({ canvas, viewport })` → `.promise`
+  - `render` takes `canvas` as of `pdfjs-dist` v6; `canvasContext` still works but is
+    kept only for backwards compatibility.
+  - `render` returns a `RenderTask`, not a promise — keep the task so you can `cancel()` it.
 
 **Hints:**
 - pdf.js needs a worker. With Vite:
@@ -40,6 +43,7 @@ npm install -D tailwindcss @tailwindcss/vite
 - Keep **two copies** of the file bytes conceptually: the original `ArrayBuffer` (for pdf-lib later) and the rendered canvases (for display only). pdf.js may transfer/detach the buffer you pass it — pass it a copy (`bytes.slice(0)`).
 - Render each page in its own `<canvas>` inside a React component; use a `ref` + `useEffect`. Guard against double-render in React StrictMode (cancel the render task in the effect cleanup).
 - Pick a display scale so the page fits your layout (e.g. fixed CSS width, compute `scale = displayWidth / viewport.width` at scale 1). **Record the scale per page** — you'll need it for coordinate math in Milestone 4.
+- For sharp text on high-DPI screens, size the canvas *bitmap* at `scale * devicePixelRatio` and set `canvas.style.width/height` back down to the CSS size. Keep that multiplication inside the render helper: the scale you record for coordinates must stay CSS-based (see [ARCHITECTURE.md](ARCHITECTURE.md) → Gotchas).
 
 **Checkpoint:** A multi-page PDF displays crisply; scrolling works; no console errors.
 

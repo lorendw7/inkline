@@ -1,15 +1,21 @@
+# Builds the site and publishes it to GitHub Pages on every push to main.
+# The build output is never committed: `dist/` is gitignored and produced here.
 name: Deploy to GitHub Pages
 
 on:
   push:
     branches: [main]
+  # Allows the workflow to be started by hand from the Actions tab.
   workflow_dispatch:
 
+# `pages: write` publishes the site; `id-token: write` issues the OIDC token
+# that deploy-pages authenticates with.
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# One deployment at a time — a newer push cancels a run still in progress.
 concurrency:
   group: pages
   cancel-in-progress: true
@@ -18,14 +24,20 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # These actions are pinned to majors that run on Node 24. Older majors
+      # (checkout@v4, setup-node@v4, upload-pages-artifact@v3) target the
+      # deprecated Node 20 runtime and log a warning on every run.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
+          # pdfjs-dist requires Node >= 22.13.
           node-version: 22
           cache: npm
+      # `npm ci` installs strictly from package-lock.json, so CI resolves the
+      # exact dependency tree the lockfile records.
       - run: npm ci
       - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
@@ -37,4 +49,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
