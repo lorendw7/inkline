@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { getDisplayScale, renderPage } from "../lib/pdf";
+import { useDevicePixelRatio } from "../hooks/useDevicePixelRatio";
 
 
 interface PdfPageProps {
@@ -11,6 +12,11 @@ interface PdfPageProps {
     displayWidth: number
 }
 
+// Beyond 3x the bitmap area costs real memory for no visible gain. Capping is
+// the component's call, not the hook's: the hook reports the ratio, the view
+// decides how much of it is worth paying for.
+const MAX_DPR = 3;
+
 /**
  * Renders one PDF page onto its own canvas.
  *
@@ -20,6 +26,7 @@ interface PdfPageProps {
  */
 export function PdfPage({ pdfDoc, pageNumber, displayWidth}: PdfPageProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const dpr = Math.min(useDevicePixelRatio(), MAX_DPR);
 
     useEffect(() => {
         // Guards scoped to this run. Every re-run gets a fresh pair, so a stale
@@ -39,7 +46,7 @@ export function PdfPage({ pdfDoc, pageNumber, displayWidth}: PdfPageProps) {
             if (cancelled) return;
 
             const scale = getDisplayScale(page, displayWidth);
-            task = renderPage(page, canvas, scale);
+            task = renderPage(page, canvas, scale, dpr);
 
             try {
                 await task.promise;
@@ -57,7 +64,7 @@ export function PdfPage({ pdfDoc, pageNumber, displayWidth}: PdfPageProps) {
             cancelled = true;
             task?.cancel();
         }
-    }, [pdfDoc, pageNumber, displayWidth]);
+    }, [pdfDoc, pageNumber, displayWidth, dpr]);
 
     return (
         // `relative` makes this wrapper the positioning context for the

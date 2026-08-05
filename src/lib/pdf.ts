@@ -55,20 +55,20 @@ export function getDisplayScale(page: PDFPageProxy, displayWidth: number): numbe
  * to abort a render that has been superseded — React re-runs effects, and users
  * switch files mid-render. Awaiting here would swallow that ability.
  *
- * `scale` is and stays CSS pixels per PDF point. Device pixel density is dealt
- * with entirely inside this function, so it never leaks into the coordinate
- * maths that the export step depends on.
+ * `scale` is and stays CSS pixels per PDF point, and `dpr` is passed in rather
+ * than read here: only the caller knows when the ratio has changed and a redraw
+ * is due. Multiplying the two stays inside this function, so device density
+ * never leaks into the coordinate maths the export step depends on.
  */
 export function renderPage(
   page: PDFPageProxy,
   canvas: HTMLCanvasElement,
   scale: number,
+  dpr: number
 ): RenderTask {
-  // Read the density on every render: it changes when the window moves to a
-  // different monitor, when OS scaling changes, or when the user zooms. Capped
-  // at 2 because a 3x device would more than double the bitmap area for no
-  // visible gain.
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // Rasterise at device resolution. `scale` on its own yields one bitmap pixel
+  // per CSS pixel, which the browser would then have to stretch across `dpr`
+  // physical pixels — the cause of blurry text on high-DPI screens.
   const viewport = page.getViewport({scale: scale * dpr});
 
   // Two independent sizes. The bitmap takes the extra device pixels so that one
