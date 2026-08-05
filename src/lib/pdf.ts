@@ -54,18 +54,30 @@ export function getDisplayScale(page: PDFPageProxy, displayWidth: number): numbe
  * Returns the task instead of awaiting it, because the caller needs `cancel()`
  * to abort a render that has been superseded — React re-runs effects, and users
  * switch files mid-render. Awaiting here would swallow that ability.
+ *
+ * `scale` is and stays CSS pixels per PDF point. Device pixel density is dealt
+ * with entirely inside this function, so it never leaks into the coordinate
+ * maths that the export step depends on.
  */
 export function renderPage(
   page: PDFPageProxy,
   canvas: HTMLCanvasElement,
   scale: number,
 ): RenderTask {
-  const viewport = page.getViewport({scale});
+  // Read the density on every render: it changes when the window moves to a
+  // different monitor, when OS scaling changes, or when the user zooms. Capped
+  // at 2 because a 3x device would more than double the bitmap area for no
+  // visible gain.
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const viewport = page.getViewport({scale: scale * dpr});
 
-  // Sizing the bitmap also sizes the element on screen: a canvas with no CSS
-  // width is displayed at its bitmap size.
+  // Two independent sizes. The bitmap takes the extra device pixels so that one
+  // bitmap pixel lands on exactly one physical pixel; the CSS size divides them
+  // back out so the page still occupies its intended on-screen width.
   canvas.width = viewport.width;
   canvas.height = viewport.height;
+  canvas.style.width = `${viewport.width / dpr}px`;
+  canvas.style.height = `${viewport.height / dpr}px`;
 
   // pdfjs-dist v6 prefers `canvas`; `canvasContext` is kept only for backwards
   // compatibility.
