@@ -51,7 +51,7 @@ without it every asset URL would 404. The build output is never committed.
 - [ ] **Milestone 2 — Signature pad**: draw/upload a transparent-PNG signature
 - [ ] **Milestone 3 — Placement**: drag & resize the signature overlay with react-rnd
 - [ ] **Milestone 4 — Export**: compose and download the signed PDF with pdf-lib
-- [ ] **Milestone 5 — Polish**: error states, keyboard shortcuts, mobile, deployment
+- [ ] **Milestone 5 — Polish**: error states, keyboard shortcuts, responsive UI adaptation for mobile devices and different screen sizes, deployment
 
 See the [Development Guide](docs/GUIDE.md) for what each milestone involves.
 
