@@ -134,8 +134,9 @@ interface Placement {
 - Empty states and error handling (non-PDF file, encrypted PDF — `PDFDocument.load` throws; catch and show a message)
 - Keyboard: `Delete` removes the selected placement; `Esc` closes the pad modal
 - Mobile: signature_pad works with touch out of the box; check react-rnd touch behavior
+- Responsive UI adaptation for mobile devices and different screen sizes
 - Deploy: `npm run build` → Vercel or GitHub Pages (set Vite `base` if using Pages under a subpath)
-
+  
 ---
 
 ## Suggested order of files
