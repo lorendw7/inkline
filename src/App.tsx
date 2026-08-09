@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { loadPdf } from './lib/pdf'
 import { PdfPage } from './components/PdfPage'
+import { SignaturePadModal } from './components/SignaturePadModal'
 
 
 
@@ -22,6 +23,10 @@ function App() {
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
 
   const [fileName, setFileName] = useState<string | null>(null);
+
+  // Whether the signature modal is mounted. The modal has no such state of its
+  // own — see SignaturePadModal.
+  const [isPadOpen, setIsPadOpen] = useState(false);
 
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -57,8 +62,17 @@ function App() {
             onChange={handleFileChange}
             className="sr-only"
           />
+
         </label>
 
+        {/* A sibling of the label, not a child: a label may only wrap the one
+            form control it names, and a nested button would be a second one. */}
+        <button
+          type='button'
+          onClick={() => setIsPadOpen(true)}
+          className='rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-100'>
+          Sign
+        </button>
         {fileName && <span className="text-sm text-neutral-500">{fileName}</span>}
       </header>
       <div className='flex flex-col items-center gap-6 p-8'>
@@ -71,6 +85,14 @@ function App() {
           ))
         }
       </div>
+      {/* Rendered at the top level, not inside the page column: a `fixed` element
+          is positioned against the viewport only while no ancestor establishes a
+          containing block with transform, filter or perspective.
+          Unmounted while closed rather than hidden, so a half-drawn signature
+          never survives to the next time the pad is opened. */}
+      {
+        isPadOpen && <SignaturePadModal onClose={() => setIsPadOpen(false)} />
+      }
     </div>
   )
 }
