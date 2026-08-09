@@ -4,6 +4,8 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { loadPdf } from './lib/pdf'
 import { PdfPage } from './components/PdfPage'
 import { SignaturePadModal } from './components/SignaturePadModal'
+import type { Placement } from './lib/types'
+import { loadImageSize } from './lib/image'
 
 
 
@@ -12,7 +14,14 @@ import { SignaturePadModal } from './components/SignaturePadModal'
  * fixes the scale for the whole document. Milestone 4 converts overlay
  * coordinates back into PDF points using the same number.
  */
-const DISPLAY_WIDTH = 800
+const DISPLAY_WIDTH = 800;
+
+/**
+ * Initial on-screen width of a placed signature, in CSS pixels. Only the width
+ * is a constant: the height follows from the image's own aspect ratio, so a
+ * wide scrawl and a tall one both keep their proportions.
+ */
+const SIGNATURE_WIDTH = 180;
 
 /**
  * Owns all app state as plain, serializable data; everything below is a view
@@ -30,6 +39,11 @@ function App() {
 
   const [signature, setSignature] = useState<string | null>(null);
 
+  // Every signature placed on a page, as plain data. The overlay is only a view
+  // over this array, so dragging edits numbers here rather than the DOM, and the
+  // export code in Milestone 4 reads the same numbers.
+  const [placements, setPlacements] = useState<Placement[]>([]);
+
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -43,11 +57,27 @@ function App() {
     setFileName(file.name);
   }
 
-  // Closing the modal is the parent's call, not the modal's, which is why both
-  // state changes sit together here.
-  function handleConfirmSignature(dataUrl: string) {
+  // Async because the placement's height depends on the image's aspect ratio,
+  // and the browser only reports that once the image has decoded.
+  async function handleConfirmSignature(dataUrl: string) {
     setSignature(dataUrl);
     setIsPadOpen(false);
+
+    const natural = await loadImageSize(dataUrl);
+    const width = SIGNATURE_WIDTH;
+    const height = width * (natural.height / natural.width);
+
+    // One signature at a time for now, so the array is replaced rather than
+    // appended to. It lands near the top of the first page, horizontally
+    // centred — a visible starting point the user then drags where they want.
+    setPlacements([{
+      id: crypto.randomUUID(),
+      pageIndex: 0,
+      x: (DISPLAY_WIDTH - width) / 2,
+      y: 100,
+      width,
+      height
+    }]);
   }
 
 
@@ -100,7 +130,33 @@ function App() {
         {
           pdfDoc &&
           Array.from({ length: pdfDoc.numPages }, (_, index) => (
-            <PdfPage key={index} pageNumber={index + 1} pdfDoc={pdfDoc} displayWidth={DISPLAY_WIDTH} />
+            <PdfPage key={index} pageNumber={index + 1} pdfDoc={pdfDoc} displayWidth={DISPLAY_WIDTH}>
+              {/* Each page draws only the placements that belong to it. The
+                  filter is what turns one flat array into per-page overlays. */}
+              {
+                placements.filter(p => p.pageIndex === index)
+                .map(p => (
+                  // `absolute` positions this against PdfPage's `relative`
+                  // wrapper, so x/y are measured from the page's top-left —
+                  // the same origin Placement documents.
+                  <img
+                    key={p.id}
+                    // A placement can only exist after a signature was
+                    // confirmed, so this never actually falls back. Milestone 3
+                    // proper will give each placement its own image instead.
+                    src={signature ?? undefined}
+                    // Decorative: the header already shows the signature with a
+                    // real label, so announcing it again here is just noise.
+                    alt=''
+                    className='absolute'
+                    // Inline styles, not Tailwind classes: these are runtime
+                    // numbers that change as the user drags, and a class name
+                    // can only express values known at build time.
+                    style={{ left: p.x, top: p.y, width: p.width, height: p.height }}
+                  />
+                ))
+              }
+            </PdfPage>
           ))
         }
 

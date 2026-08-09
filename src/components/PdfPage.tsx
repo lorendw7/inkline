@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { getDisplayScale, renderPage } from "../lib/pdf";
 import { useDevicePixelRatio } from "../hooks/useDevicePixelRatio";
+import type { ReactNode } from 'react'
+
 
 
 interface PdfPageProps {
@@ -10,6 +12,13 @@ interface PdfPageProps {
     pageNumber: number
     /** Target width in CSS pixels; determines the render scale. */
     displayWidth: number
+    /**
+     * Absolutely-positioned overlays for this page — the placed signatures.
+     * Taking them as children keeps this component ignorant of what a
+     * signature is: it owns the canvas and the positioning context, nothing
+     * more, and App decides what sits on top.
+     */
+    children?: ReactNode
 }
 
 // Beyond 3x the bitmap area costs real memory for no visible gain. Capping is
@@ -24,7 +33,7 @@ const MAX_DPR = 3;
  * two escape hatches React provides: a ref to reach the real element, and an
  * effect to draw into it once that element exists.
  */
-export function PdfPage({ pdfDoc, pageNumber, displayWidth}: PdfPageProps) {
+export function PdfPage({ pdfDoc, pageNumber, displayWidth, children }: PdfPageProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const dpr = Math.min(useDevicePixelRatio(), MAX_DPR);
 
@@ -74,6 +83,11 @@ export function PdfPage({ pdfDoc, pageNumber, displayWidth}: PdfPageProps) {
             {/* `block` because a canvas is inline by default, which leaves a
                 few pixels of baseline gap below it inside the rounded card. */}
             <canvas ref={canvasRef} className="block" />
+
+            {/* After the canvas, so overlays paint on top of it without needing
+                a z-index. `overflow-hidden` above clips anything dragged past
+                the page edge, which is exactly the boundary we want. */}
+            {children}
         </div>
     )
 }
