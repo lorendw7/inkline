@@ -98,6 +98,21 @@ function App() {
     );
   }
 
+  /**
+   * Drop one placement. Filter rather than map: this removes an item instead
+   * of rewriting one, and again it returns a new array so React sees a change.
+   *
+   * Clearing activeId matters because it may still name the placement that just
+   * went away. Nothing breaks if it does — no id would match — but leaving a
+   * reference to something deleted is the kind of thing that bites once the
+   * Delete key starts reading the same state.
+   */
+  function removePlacement(id: string) {
+    setPlacements(prev => prev.filter(p => p.id !== id));
+    setActiveId(null);
+  }
+
+
   return (
     <div className="min-h-screen bg-neutral-100">
       <header className='sticky top-0 z-10
@@ -169,12 +184,17 @@ function App() {
                       // The ratio came from the image's natural size, so locking
                       // it is what keeps the signature from being squashed.
                       lockAspectRatio
+                      // A mousedown anywhere inside this box normally starts a
+                      // drag, and the delete button is inside it. This selector
+                      // exempts the button, which would otherwise be almost
+                      // impossible to click without dragging the signature away.
+                      cancel='.no-drag'
                       // Two pixels of border are always there and only the
                       // colour changes, so the image never shifts when the
                       // highlight appears. A border sits inside the box, which
                       // an outline or a ring would not — those get clipped by
                       // the page wrapper's overflow-hidden at the very edge.
-                      className={`border-2 ${activeId === p.id ? 'border-blue-500' : 'border-transparent'}`}
+                      className={`group border-2 ${activeId === p.id ? 'border-blue-500' : 'border-transparent'}`}
                       // The start handlers light the highlight and the stop
                       // handlers put it out, so the two gestures share one
                       // piece of state rather than each growing their own.
@@ -217,6 +237,29 @@ function App() {
                         // released. Opting out of native dragging is the fix.
                         draggable={false}
                       />
+                      {/* Corner-inset rather than hanging outside the box, so
+                          the page wrapper's overflow-hidden cannot clip it when
+                          the signature sits flush against the page edge. It does
+                          cover the top-right resize handle — with the aspect
+                          ratio locked, the other three corners do the same job.
+                          `no-drag` is the class the cancel selector looks for,
+                          and `group-hover` pairs with `group` on the Rnd box, so
+                          hovering anywhere over the signature fades this in.
+                          `focus-visible` does the same for keyboard users, who
+                          would otherwise land on a button they cannot see —
+                          and it is focus-visible rather than focus so a mouse
+                          click does not leave the button stuck on. */}
+                      <button
+                        type='button'
+                        className='no-drag absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white opacity-0 transition-opacity 
+                        group-hover:opacity-100 focus-visible:opacity-100'
+                        // The label is a bare glyph, so the accessible name has
+                        // to be spelled out for screen readers.
+                        aria-label='Remove signature'
+                        onClick={() => removePlacement(p.id)}
+                      >
+                        ×
+                      </button>
                     </Rnd>
                   ))
               }
