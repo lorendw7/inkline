@@ -28,6 +28,8 @@ function App() {
   // own — see SignaturePadModal.
   const [isPadOpen, setIsPadOpen] = useState(false);
 
+  const [signature, setSignature] = useState<string | null>(null);
+
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -39,6 +41,13 @@ function App() {
     // Storing the document re-renders App, which mounts one PdfPage per page.
     setPdfDoc(doc);
     setFileName(file.name);
+  }
+
+  // Closing the modal is the parent's call, not the modal's, which is why both
+  // state changes sit together here.
+  function handleConfirmSignature(dataUrl: string) {
+    setSignature(dataUrl);
+    setIsPadOpen(false);
   }
 
 
@@ -74,6 +83,16 @@ function App() {
           Sign
         </button>
         {fileName && <span className="text-sm text-neutral-500">{fileName}</span>}
+        {/* A data URL carries the image bytes inline, so it goes straight into
+            `src` with no network request and no object URL to revoke. */}
+        {
+          signature &&
+          (
+            <img src={signature}
+              alt="Your signature"
+              className='ml-auto h-8 rounded border border-neutral-200 bg-white' />
+          )
+        }
       </header>
       <div className='flex flex-col items-center gap-6 p-8'>
         {/* Nothing renders before a document is loaded: `null && ...` is null,
@@ -84,14 +103,10 @@ function App() {
             <PdfPage key={index} pageNumber={index + 1} pdfDoc={pdfDoc} displayWidth={DISPLAY_WIDTH} />
           ))
         }
+
       </div>
-      {/* Rendered at the top level, not inside the page column: a `fixed` element
-          is positioned against the viewport only while no ancestor establishes a
-          containing block with transform, filter or perspective.
-          Unmounted while closed rather than hidden, so a half-drawn signature
-          never survives to the next time the pad is opened. */}
       {
-        isPadOpen && <SignaturePadModal onClose={() => setIsPadOpen(false)} />
+        isPadOpen && <SignaturePadModal onClose={() => setIsPadOpen(false)} onConfirm={handleConfirmSignature} />
       }
     </div>
   )

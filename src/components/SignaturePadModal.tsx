@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import SignaturePad from "signature_pad"
 import { useDevicePixelRatio } from "../hooks/useDevicePixelRatio"
 
@@ -9,7 +9,12 @@ const MAX_DPR = 3;
 
 interface SignaturePadModalProps {
     /** Called when the user dismisses the modal. */
-    onClose: () => void
+    onClose: () => void,
+    /**
+     * Receives the finished signature as a transparent PNG data URL. The parent
+     * decides what to do next, including whether to close the modal.
+     */
+    onConfirm: (dataUrl: string) => void
 }
 
 /**
@@ -24,13 +29,18 @@ interface SignaturePadModalProps {
  * element: created once the element exists, torn down when it goes away. React
  * renders the shell; the library owns everything inside the canvas.
  */
-export function SignaturePadModal({ onClose }: SignaturePadModalProps) {
+export function SignaturePadModal({ onClose, onConfirm }: SignaturePadModalProps) {
     // Two refs, two different reasons. canvasRef reaches the real DOM element;
     // padRef holds the library instance, which has to survive re-renders but
     // must not cause one when it changes — that is what separates it from state.
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const padRef = useRef<SignaturePad | null>(null);
     const dpr = Math.min(useDevicePixelRatio(), MAX_DPR);
+    // Mirrors pad.isEmpty() into React. The pad's own state is invisible to
+    // React, and `disabled` is rendered output that only changes on a re-render,
+    // so the mirror has to be resynced on every path that changes the drawing:
+    // after a stroke, on clear, and when the effect rebuilds the canvas.
+    const [isEmpty, setIsEmpty] = useState(true);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -59,11 +69,15 @@ export function SignaturePadModal({ onClose }: SignaturePadModalProps) {
         });
 
         padRef.current = pad;
+        setIsEmpty(true);
+        const handleEndStroke = () => setIsEmpty(pad.isEmpty());
+        pad.addEventListener("endStroke", handleEndStroke);
 
         // signature_pad registers pointer listeners on the canvas; off() removes
         // them. Same contract as any addEventListener: whoever subscribes is
         // responsible for unsubscribing.
         return () => {
+            pad.removeEventListener("endStroke", handleEndStroke);
             pad.off();
             padRef.current = null;
         }
@@ -74,6 +88,15 @@ export function SignaturePadModal({ onClose }: SignaturePadModalProps) {
     // it changes nothing React renders — no re-render is needed or wanted.
     function handleClear() {
         padRef.current?.clear();
+        setIsEmpty(true);
+    }
+
+    // The emptiness check is deliberately repeated here: `disabled` only guards
+    // the button in the UI, and the UI is not a security boundary.
+    function handleConfirm() {
+        const pad = padRef.current;
+        if (!pad || pad.isEmpty()) return;
+        onConfirm(pad.toDataURL("image/png"));
     }
 
     return (
@@ -89,7 +112,7 @@ export function SignaturePadModal({ onClose }: SignaturePadModalProps) {
                     className="block h-48 w-full touch-none rounded-md border border-neutral-300 bg-neutral-50"
                 />
 
-                <div className="mt-4 flex jutify-end gap-2">
+                <div className="mt-4 flex gap-2 justify-end ">
                     <button
                         type="button"
                         onClick={handleClear}
@@ -97,7 +120,7 @@ export function SignaturePadModal({ onClose }: SignaturePadModalProps) {
                         mr-auto
                         rounded-md px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100"
                     >
-                       Clear
+                        Clear
                     </button>
                     <button
                         type="button"
@@ -105,6 +128,14 @@ export function SignaturePadModal({ onClose }: SignaturePadModalProps) {
                         className="rounded-md px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100"
                     >
                         Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleConfirm}
+                        disabled={isEmpty}
+                        className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
+                    >
+                        Confirm
                     </button>
                 </div>
             </div>

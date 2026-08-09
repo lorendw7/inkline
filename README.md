@@ -48,7 +48,7 @@ without it every asset URL would 404. The build output is never committed.
 
 - [x] **Milestone 0 — Scaffold**: Vite + React + TypeScript + Tailwind v4, all core libraries installed
 - [x] **Milestone 1 — PDF rendering**: load a file and render every page to canvas with pdf.js, at device pixel density
-- [ ] **Milestone 2 — Signature pad**: draw/upload a transparent-PNG signature
+- [x] **Milestone 2 — Signature pad**: draw a transparent-PNG signature in a modal (uploading an existing PNG is still open)
 - [ ] **Milestone 3 — Placement**: drag & resize the signature overlay with react-rnd
 - [ ] **Milestone 4 — Export**: compose and download the signed PDF with pdf-lib
 - [ ] **Milestone 5 — Polish**: error states, keyboard shortcuts, responsive UI adaptation for mobile devices and different screen sizes, deployment
