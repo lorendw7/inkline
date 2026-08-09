@@ -6,6 +6,7 @@ import { PdfPage } from './components/PdfPage'
 import { SignaturePadModal } from './components/SignaturePadModal'
 import type { Placement } from './lib/types'
 import { loadImageSize } from './lib/image'
+import { Rnd } from 'react-rnd'
 
 
 
@@ -80,6 +81,18 @@ function App() {
     }]);
   }
 
+  /**
+   * Overwrite some fields of one placement, leaving the rest alone.
+   *
+   * `Partial<Placement>` is what lets one function serve both callers: a drag
+   * patches x/y, a resize patches all four. Nothing is mutated — `map` builds a
+   * new array and the spread builds a new object, but only for the placement
+   * that actually changed, so React can skip the others.
+   */
+  function updatePlacement(id: string, patch: Partial<Placement>) {
+    setPlacements(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p))
+    );
+  }
 
   return (
     <div className="min-h-screen bg-neutral-100">
@@ -135,31 +148,60 @@ function App() {
                   filter is what turns one flat array into per-page overlays. */}
               {
                 placements.filter(p => p.pageIndex === index)
-                .map(p => (
-                  // `absolute` positions this against PdfPage's `relative`
-                  // wrapper, so x/y are measured from the page's top-left —
-                  // the same origin Placement documents.
-                  <img
+                  .map(p => (
+                   // Controlled, not uncontrolled: Rnd is told where to be on
+                   // every render instead of remembering it internally. That
+                   // costs a round trip through state on each gesture, and buys
+                   // the guarantee that `placements` is never out of date —
+                   // which is the whole point, because Milestone 4 exports
+                   // these numbers and cannot reach inside Rnd to get them.
+                   <Rnd
                     key={p.id}
-                    // A placement can only exist after a signature was
-                    // confirmed, so this never actually falls back. Milestone 3
-                    // proper will give each placement its own image instead.
-                    src={signature ?? undefined}
-                    // Decorative: the header already shows the signature with a
-                    // real label, so announcing it again here is just noise.
-                    alt=''
-                    className='absolute'
-                    // Inline styles, not Tailwind classes: these are runtime
-                    // numbers that change as the user drags, and a class name
-                    // can only express values known at build time.
-                    style={{ left: p.x, top: p.y, width: p.width, height: p.height }}
-                  />
-                ))
+                    position={{x: p.x, y: p.y}}
+                    size={{width: p.width, height: p.height}}
+                    // Resolves to PdfPage's wrapper — the same element whose
+                    // `relative` makes x/y page-relative in the first place.
+                    bounds="parent"
+                    // The ratio came from the image's natural size, so locking
+                    // it is what keeps the signature from being squashed.
+                    lockAspectRatio
+                    // `data` already carries the new top-left corner.
+                    onDragStop={(_e, data) => updatePlacement(p.id, { x: data.x, y: data.y })}
+                    // Position is patched alongside size because a top or left
+                    // handle pins the opposite corner and moves the origin.
+                    // Size is read off the element rather than from `_delta`,
+                    // which is only the change; parseFloat turns Rnd's
+                    // "213.5px" into a number without rounding it.
+                    onResizeStop={(_e, _dir, ref, _delta, position)=> updatePlacement(p.id, {
+                      width: parseFloat(ref.style.width),
+                      height: parseFloat(ref.style.height),
+                      x: position.x,
+                      y: position.y
+                    })}
+                   >
+                    {/* Fills the box Rnd sizes, so resizing the box resizes the
+                        image. A placement only exists after a signature was
+                        confirmed, so `src` never really falls back. */}
+                    <img
+                      src={signature ?? undefined}
+                      alt=''
+                      // `select-none` keeps a drag from turning into a text
+                      // selection, which would compete for the same gesture.
+                      className='h-full w-full select-none'
+                      // An <img> is a native drag source by default, and a
+                      // native drag replaces mousemove/mouseup with its own
+                      // event set. react-draggable would then never see the
+                      // mouseup it is waiting for, stay stuck in "dragging",
+                      // and keep moving the signature after the button is
+                      // released. Opting out of native dragging is the fix.
+                      draggable={false}
+                    />
+                   </Rnd>
+                  ))
               }
             </PdfPage>
           ))
         }
-
       </div>
       {
         isPadOpen && <SignaturePadModal onClose={() => setIsPadOpen(false)} onConfirm={handleConfirmSignature} />
