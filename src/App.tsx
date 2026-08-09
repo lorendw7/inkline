@@ -45,6 +45,10 @@ function App() {
   // export code in Milestone 4 reads the same numbers.
   const [placements, setPlacements] = useState<Placement[]>([]);
 
+  // The placement the user currently has hold of, or null. Only drives the
+  // highlight for now, but it is also the "selected" notion the delete button
+  // and the Delete key will need.
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -149,54 +153,71 @@ function App() {
               {
                 placements.filter(p => p.pageIndex === index)
                   .map(p => (
-                   // Controlled, not uncontrolled: Rnd is told where to be on
-                   // every render instead of remembering it internally. That
-                   // costs a round trip through state on each gesture, and buys
-                   // the guarantee that `placements` is never out of date —
-                   // which is the whole point, because Milestone 4 exports
-                   // these numbers and cannot reach inside Rnd to get them.
-                   <Rnd
-                    key={p.id}
-                    position={{x: p.x, y: p.y}}
-                    size={{width: p.width, height: p.height}}
-                    // Resolves to PdfPage's wrapper — the same element whose
-                    // `relative` makes x/y page-relative in the first place.
-                    bounds="parent"
-                    // The ratio came from the image's natural size, so locking
-                    // it is what keeps the signature from being squashed.
-                    lockAspectRatio
-                    // `data` already carries the new top-left corner.
-                    onDragStop={(_e, data) => updatePlacement(p.id, { x: data.x, y: data.y })}
-                    // Position is patched alongside size because a top or left
-                    // handle pins the opposite corner and moves the origin.
-                    // Size is read off the element rather than from `_delta`,
-                    // which is only the change; parseFloat turns Rnd's
-                    // "213.5px" into a number without rounding it.
-                    onResizeStop={(_e, _dir, ref, _delta, position)=> updatePlacement(p.id, {
-                      width: parseFloat(ref.style.width),
-                      height: parseFloat(ref.style.height),
-                      x: position.x,
-                      y: position.y
-                    })}
-                   >
-                    {/* Fills the box Rnd sizes, so resizing the box resizes the
+                    // Controlled, not uncontrolled: Rnd is told where to be on
+                    // every render instead of remembering it internally. That
+                    // costs a round trip through state on each gesture, and buys
+                    // the guarantee that `placements` is never out of date —
+                    // which is the whole point, because Milestone 4 exports
+                    // these numbers and cannot reach inside Rnd to get them.
+                    <Rnd
+                      key={p.id}
+                      position={{ x: p.x, y: p.y }}
+                      size={{ width: p.width, height: p.height }}
+                      // Resolves to PdfPage's wrapper — the same element whose
+                      // `relative` makes x/y page-relative in the first place.
+                      bounds="parent"
+                      // The ratio came from the image's natural size, so locking
+                      // it is what keeps the signature from being squashed.
+                      lockAspectRatio
+                      // Two pixels of border are always there and only the
+                      // colour changes, so the image never shifts when the
+                      // highlight appears. A border sits inside the box, which
+                      // an outline or a ring would not — those get clipped by
+                      // the page wrapper's overflow-hidden at the very edge.
+                      className={`border-2 ${activeId === p.id ? 'border-blue-500' : 'border-transparent'}`}
+                      // The start handlers light the highlight and the stop
+                      // handlers put it out, so the two gestures share one
+                      // piece of state rather than each growing their own.
+                      onDragStart={() => setActiveId(p.id)}
+                      // `data` already carries the new top-left corner.
+                      onDragStop={(_e, data) => {
+                        setActiveId(null);
+                        updatePlacement(p.id, { x: data.x, y: data.y });
+                      }}
+                      onResizeStart={() => setActiveId(p.id)}
+                      // Position is patched alongside size because a top or left
+                      // handle pins the opposite corner and moves the origin.
+                      // Size is read off the element rather than from `_delta`,
+                      // which is only the change; parseFloat turns Rnd's
+                      // "213.5px" into a number without rounding it.
+                      onResizeStop={(_e, _dir, ref, _delta, position) => {
+                        setActiveId(null);
+                        updatePlacement(p.id, {
+                          width: parseFloat(ref.style.width),
+                          height: parseFloat(ref.style.height),
+                          x: position.x,
+                          y: position.y
+                        });
+                      }}
+                    >
+                      {/* Fills the box Rnd sizes, so resizing the box resizes the
                         image. A placement only exists after a signature was
                         confirmed, so `src` never really falls back. */}
-                    <img
-                      src={signature ?? undefined}
-                      alt=''
-                      // `select-none` keeps a drag from turning into a text
-                      // selection, which would compete for the same gesture.
-                      className='h-full w-full select-none'
-                      // An <img> is a native drag source by default, and a
-                      // native drag replaces mousemove/mouseup with its own
-                      // event set. react-draggable would then never see the
-                      // mouseup it is waiting for, stay stuck in "dragging",
-                      // and keep moving the signature after the button is
-                      // released. Opting out of native dragging is the fix.
-                      draggable={false}
-                    />
-                   </Rnd>
+                      <img
+                        src={signature ?? undefined}
+                        alt=''
+                        // `select-none` keeps a drag from turning into a text
+                        // selection, which would compete for the same gesture.
+                        className='h-full w-full select-none'
+                        // An <img> is a native drag source by default, and a
+                        // native drag replaces mousemove/mouseup with its own
+                        // event set. react-draggable would then never see the
+                        // mouseup it is waiting for, stay stuck in "dragging",
+                        // and keep moving the signature after the button is
+                        // released. Opting out of native dragging is the fix.
+                        draggable={false}
+                      />
+                    </Rnd>
                   ))
               }
             </PdfPage>
