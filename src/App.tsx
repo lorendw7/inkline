@@ -155,6 +155,11 @@ function App() {
    * browser only reports once the image has decoded.
    */
   async function addPlacement(dataUrl: string, pageIndex: number) {
+    // Both buttons that reach this are already disabled without a document, so
+    // this line is not what keeps the user out — it is what keeps the invariant
+    // true no matter who calls next: no placement may name a page that has no
+    // document behind it.
+    if (!pdfDoc) return;
     const natural = await loadImageSize(dataUrl);
     const width = SIGNATURE_WIDTH;
     const height = width * (natural.height / natural.width);
@@ -253,9 +258,14 @@ function App() {
         </label>
 
         {/* A sibling of the label, not a child: a label may only wrap the one
-            form control it names, and a nested button would be a second one. */}
+            form control it names, and a nested button would be a second one.
+
+            Disabled until a document is open, because a signature confirmed
+            with nothing on screen would be placed on a page that does not
+            exist — invisible, and cleared again by the next file anyway. */}
         <button
           type='button'
+          disabled={!pdfDoc}
           onClick={() => setIsPadOpen(true)}
           className='rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-100'>
           Sign
@@ -280,7 +290,7 @@ function App() {
             are for people. `tabular-nums` gives the digits a fixed width, so
             nothing beside them shifts when 9 rolls over to 10. */}
         {pdfDoc && (
-          <span className='text-sm tabular-nums text-neutral-500 border border-neutral-300'>
+          <span className='text-sm tabular-nums rounded-md text-neutral-500 border p-1 border-neutral-300'>
             {visiblePage + 1} / {pdfDoc.numPages}
           </span>
         )}
