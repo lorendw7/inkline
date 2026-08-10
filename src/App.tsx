@@ -26,6 +26,26 @@ const DISPLAY_WIDTH = 800;
 const SIGNATURE_WIDTH = 180;
 
 /**
+ * The shared look of the header's secondary buttons.
+ *
+ * Written once because it was already copied twice and had already drifted:
+ * one copy grew the disabled variants and the other did not, which left a
+ * button that greys out nothing and still lights up on hover while dead.
+ *
+ * Splitting the string across `+` is safe, but only because every class name
+ * survives intact as literal text: Tailwind never runs this code, it scans the
+ * source for things that look like class names. Anything assembled at runtime —
+ * `bg-${tone}-100` — is invisible to that scan and produces no CSS at all.
+ * Which is also why each fragment has to end in a space; without it two class
+ * names would be glued into one that matches nothing.
+ */
+const BUTTON_CLASS =
+  'rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium ' +
+  'hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 ' +
+  'disabled:hover:bg-transparent';
+
+
+/**
  * Owns all app state as plain, serializable data; everything below is a view
  * over it. See docs/ARCHITECTURE.md.
  */
@@ -267,7 +287,7 @@ function App() {
           type='button'
           disabled={!pdfDoc}
           onClick={() => setIsPadOpen(true)}
-          className='rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-100'>
+          className={BUTTON_CLASS}>
           Sign
         </button>
         {/* Places another copy of the signature the user already drew, so the pad
@@ -281,7 +301,7 @@ function App() {
           // read the disabled prop, so here it still sees `string | null`. The
           // guard is what narrows the type; the prop is what guards the click.
           onClick={() => signature && addPlacement(signature, visiblePage)}
-          className='rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40'
+          className={BUTTON_CLASS}
         >
           Place on this page
         </button>
