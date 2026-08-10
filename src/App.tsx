@@ -142,28 +142,63 @@ function App() {
 
   }
 
-  // Async because the placement's height depends on the image's aspect ratio,
-  // and the browser only reports that once the image has decoded.
-  async function handleConfirmSignature(dataUrl: string) {
-    setSignature(dataUrl);
-    setIsPadOpen(false);
 
+  /**
+   * Put a copy of one signature on one page.
+   *
+   * Takes the data URL as a parameter rather than reading the `signature`
+   * state, because the confirm handler calls this in the same tick it calls
+   * setSignature — and a setState never rewrites the variable this render
+   * already captured. Passing the value sidesteps the question entirely.
+   *
+   * Async because the height comes from the image's aspect ratio, which the
+   * browser only reports once the image has decoded.
+   */
+  async function addPlacement(dataUrl: string, pageIndex: number) {
     const natural = await loadImageSize(dataUrl);
     const width = SIGNATURE_WIDTH;
     const height = width * (natural.height / natural.width);
 
-    // One signature at a time for now, so the array is replaced rather than
-    // appended to. It lands 100px down the page the reader is currently
-    // looking at, horizontally centred — dropping it on page 1 of a 40-page
-    // contract would put it somewhere the user cannot even see.
-    setPlacements([{
-      id: crypto.randomUUID(),
-      pageIndex: visiblePage,
-      x: (DISPLAY_WIDTH - width) / 2,
-      y: 100,
-      width,
-      height,
-    }]);
+    // Appended rather than replacing the array: the same signature can now go
+    // on several pages, and more than once on one page.
+    //
+    // The updater form — prev => … — asks React for the array as it stands now
+    // instead of using the `placements` this render captured. That matters
+    // here because an await sits between the click and this line: by now the
+    // user may have clicked again, and the captured copy would be one
+    // placement out of date.
+    setPlacements(prev => {
+      // Copies already sitting on this page. Each new one starts a little
+      // lower, so repeated clicks fan out downwards instead of stacking
+      // invisibly on the exact same spot.
+      const onThisPage = prev.filter(p => p.pageIndex === pageIndex).length;
+      return [...prev, {
+        id: crypto.randomUUID(),
+        pageIndex: pageIndex,
+        x: (DISPLAY_WIDTH - width) / 2,
+        y: 100 + onThisPage * 24,
+        width,
+        height,
+      }];
+    });
+  }
+
+  // Confirming a drawing both stores it and drops a first copy on the page the
+  // reader is looking at, so the result is immediately visible and draggable
+  // without a second click.
+  //
+  // `dataUrl` is handed straight to addPlacement rather than being read back
+  // out of state on the next line: setSignature has only queued a re-render,
+  // and `signature` in this scope is still whatever it was before.
+  //
+  // Awaited even though nothing follows: an unawaited promise that rejects
+  // becomes an unhandled rejection, and awaiting hands that failure to whoever
+  // called this instead of dropping it on the floor.
+  async function handleConfirmSignature(dataUrl: string) {
+    setSignature(dataUrl);
+    setIsPadOpen(false);
+
+    await addPlacement(dataUrl, visiblePage);
   }
 
   /**
@@ -225,12 +260,27 @@ function App() {
           className='rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-100'>
           Sign
         </button>
+        {/* Places another copy of the signature the user already drew, so the pad
+          only has to be opened once. Disabled rather than hidden when there is
+          nothing to place: a control that appears and disappears makes the
+          header jump, and a greyed-out button still says the feature exists. */}
+        <button
+          type='button'
+          disabled={!signature || !pdfDoc}
+          // `signature &&` is not redundant with `disabled` — TypeScript does not
+          // read the disabled prop, so here it still sees `string | null`. The
+          // guard is what narrows the type; the prop is what guards the click.
+          onClick={() => signature && addPlacement(signature, visiblePage)}
+          className='rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40'
+        >
+          Place on this page
+        </button>
         {fileName && <span className="text-sm text-neutral-500">{fileName}</span>}
         {/* visiblePage is a zero-based index, so it is shown +1: page numbers
             are for people. `tabular-nums` gives the digits a fixed width, so
             nothing beside them shifts when 9 rolls over to 10. */}
         {pdfDoc && (
-          <span className='text-sm tabular-nums text-neutral-500'>
+          <span className='text-sm tabular-nums text-neutral-500 border border-neutral-300'>
             {visiblePage + 1} / {pdfDoc.numPages}
           </span>
         )}
