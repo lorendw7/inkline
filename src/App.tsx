@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { loadPdf } from './lib/pdf'
@@ -7,6 +7,7 @@ import { SignaturePadModal } from './components/SignaturePadModal'
 import type { Placement } from './lib/types'
 import { loadImageSize } from './lib/image'
 import { Rnd } from 'react-rnd'
+import { useVisiblePage } from './hooks/useVisiblePage'
 
 
 
@@ -50,6 +51,76 @@ function App() {
   // and the Delete key will need.
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // ---------------------------------------------------------------------
+  // "Which page am I looking at?" — three pieces that only make sense
+  // together: pagesRef says where to look, headerHeight says how much of the
+  // screen to ignore, and useVisiblePage turns the two into a page number.
+  // ---------------------------------------------------------------------
+
+  // A ref is a box React keeps across renders. Passed to an element as `ref`,
+  // React drops the real DOM node into `.current` after that element is on
+  // screen — which is how non-React code like IntersectionObserver gets a
+  // handle on it. Changing `.current` never re-renders anything; that is the
+  // whole difference from state.
+  //
+  // This one holds the scrolling list of pages. One ref for the container is
+  // all useVisiblePage needs — it finds the individual pages by attribute.
+  const pagesRef = useRef<HTMLDivElement>(null);
+
+  // How much of the viewport's top edge the sticky header hides. The observer
+  // has to discount that strip, or a page still tucked behind the header would
+  // count as visible and the page number would advance too early.
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+
+  // A rendered element's height only exists once the browser has laid it out,
+  // so unlike most derived values this one genuinely cannot be computed during
+  // render — reading the DOM after commit is exactly what an effect is for.
+  //
+  // The empty dependency array means "run once, after the first commit". That
+  // is enough here because every child of the header has a fixed height, so the
+  // header's own height cannot change; the day one of them wraps or grows, this
+  // has to become a ResizeObserver instead.
+  //
+  // useEffect rather than useLayoutEffect: the number never reaches the screen,
+  // it only configures the observer, so there is no flicker to race against and
+  // no reason to block paint. The cost is one throwaway pass — the observer is
+  // built with an offset of 0, then this state lands and it is rebuilt with the
+  // real number, before the user could have scrolled anywhere.
+  useEffect(() => {
+    const header = headerRef.current;
+    if (header) setHeaderHeight(header.getBoundingClientRect().height);
+  }, []);
+
+  // Called unconditionally, even with no document open: hooks are matched up
+  // between renders by call order, so one skipped behind an `if` would throw
+  // the rest out of alignment. A pageCount of 0 is a state the hook handles.
+  // `??` rather than `||` — 0 is a legitimate value for a number, and the habit
+  // of reaching for `||` is what turns that into a bug somewhere else.
+  const visiblePage = useVisiblePage(pagesRef, pdfDoc?.numPages ?? 0, headerHeight);
+
+  // pdfDoc is not plain data — it is the main-thread handle on a document that
+  // a Web Worker keeps parsed in memory. React has exactly one place for "this
+  // value owns something that must be released": an effect whose cleanup
+  // releases it. Replacing the state alone would leave the old worker running
+  // with a whole PDF in it.
+  //
+  // destroy() lives on the loading task, not on the document: the worker
+  // belongs to the task that started the load, and the document proxy is only a
+  // remote control for it. No `?.` after loadingTask — that getter always
+  // returns a task; only pdfDoc itself can be null.
+  //
+  // Keyed on pdfDoc, so the cleanup closes over the *previous* document and
+  // fires when a new one replaces it, and again when App unmounts. Order comes
+  // for free: React runs child cleanups before parent ones, so every PdfPage
+  // has already cancelled its render task by the time the worker goes away.
+  //
+  // destroy() returns a promise, but a cleanup function must be synchronous —
+  // `void` marks the result as deliberately ignored rather than forgotten.
+  useEffect(() => {
+    return () => void pdfDoc?.loadingTask.destroy();
+  }, [pdfDoc])
+
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return; // the dialog was opened and cancelled
@@ -57,9 +128,18 @@ function App() {
     const bytes = await file.arrayBuffer();
     const doc = await loadPdf(bytes);
 
+    // A new document invalidates everything tied to the old one: a placement
+    // names a page index that may not exist here, and activeId names a
+    // placement that is about to be dropped. React batches every setState in
+    // this function into a single re-render — even after an await — so there is
+    // no frame where the new pages are on screen under stale overlays.
+    setPlacements([]);
+    setActiveId(null);
+
     // Storing the document re-renders App, which mounts one PdfPage per page.
     setPdfDoc(doc);
     setFileName(file.name);
+
   }
 
   // Async because the placement's height depends on the image's aspect ratio,
@@ -73,15 +153,16 @@ function App() {
     const height = width * (natural.height / natural.width);
 
     // One signature at a time for now, so the array is replaced rather than
-    // appended to. It lands near the top of the first page, horizontally
-    // centred — a visible starting point the user then drags where they want.
+    // appended to. It lands 100px down the page the reader is currently
+    // looking at, horizontally centred — dropping it on page 1 of a 40-page
+    // contract would put it somewhere the user cannot even see.
     setPlacements([{
       id: crypto.randomUUID(),
-      pageIndex: 0,
+      pageIndex: visiblePage,
       x: (DISPLAY_WIDTH - width) / 2,
       y: 100,
       width,
-      height
+      height,
     }]);
   }
 
@@ -115,7 +196,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-neutral-100">
-      <header className='sticky top-0 z-10
+      <header ref={headerRef} className='sticky top-0 z-10
       flex items-center gap-4 border-b border-neutral-200 bg-white px-6 py-3'>
         <h1 className="text-lg font-semibold">
           Inkline
@@ -145,6 +226,14 @@ function App() {
           Sign
         </button>
         {fileName && <span className="text-sm text-neutral-500">{fileName}</span>}
+        {/* visiblePage is a zero-based index, so it is shown +1: page numbers
+            are for people. `tabular-nums` gives the digits a fixed width, so
+            nothing beside them shifts when 9 rolls over to 10. */}
+        {pdfDoc && (
+          <span className='text-sm tabular-nums text-neutral-500'>
+            {visiblePage + 1} / {pdfDoc.numPages}
+          </span>
+        )}
         {/* A data URL carries the image bytes inline, so it goes straight into
             `src` with no network request and no object URL to revoke. */}
         {
@@ -156,7 +245,9 @@ function App() {
           )
         }
       </header>
-      <div className='flex flex-col items-center gap-6 p-8'>
+      {/* The element useVisiblePage searches. It only needs an ancestor of the
+          pages, and this one already exists — no wrapper was added for it. */}
+      <div ref={pagesRef} className='flex flex-col items-center gap-6 p-8'>
         {/* Nothing renders before a document is loaded: `null && ...` is null,
             and React renders null as nothing. */}
         {

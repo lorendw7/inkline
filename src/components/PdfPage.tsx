@@ -64,7 +64,12 @@ export function PdfPage({ pdfDoc, pageNumber, displayWidth, children }: PdfPageP
             }
         }
 
-        draw();
+        // Fired and not awaited, so nothing else would ever see a rejection. It
+        // has one real source: App destroys the document's worker when the user
+        // opens another file, and a getPage() still in flight rejects with it.
+        // That is expected, not an error to report — but an unhandled rejection
+        // would still be logged, so it is swallowed explicitly here.
+        draw().catch(() => {});
 
         // Runs before every re-run and on unmount. Without it, StrictMode's
         // double-invoked effect would put two render tasks on one canvas and
@@ -79,7 +84,10 @@ export function PdfPage({ pdfDoc, pageNumber, displayWidth, children }: PdfPageP
         // `relative` makes this wrapper the positioning context for the
         // signature overlays added in Milestone 3. Spacing between pages is the
         // parent container's job, so this card carries no margin of its own.
-        <div className="relative overflow-hidden rounded-lg bg-white shadow-md">
+        // `data-page-index` is how useVisiblePage finds these wrappers and
+        // learns which page each one is, without a ref per page. Zero-based to
+        // match Placement.pageIndex, hence the -1 off the 1-based pageNumber.
+        <div data-page-index={pageNumber - 1} className="relative overflow-hidden rounded-lg bg-white shadow-md">
             {/* `block` because a canvas is inline by default, which leaves a
                 few pixels of baseline gap below it inside the rounded card. */}
             <canvas ref={canvasRef} className="block" />
