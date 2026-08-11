@@ -308,8 +308,13 @@ function App() {
     // it the browser saves the URL, without it it navigates there instead.
     const link = document.createElement('a');
     link.href = url;
+    // The suggested name, derived so the download sits next to its original in
+    // a folder: contract.pdf becomes contract-signed.pdf. The regex is anchored
+    // with `$` and case-insensitive, so only a real trailing extension goes —
+    // pdf-notes.pdf keeps the word in the middle. `?? 'document'` covers the
+    // case that cannot currently happen, a file open with no name recorded.
     const base = fileName?.replace(/\.pdf$/i, '') ?? 'document';
-    link.download = `${base}signed.pdf`;
+    link.download = `${base}-signed.pdf`;
     link.click();
 
     // click() has already handed the URL to the download machinery, and did so
@@ -376,14 +381,14 @@ function App() {
             or a signature, which is as far as the check goes: with every
             placement deleted the export still runs and simply writes the
             document back out unchanged — harmless, if a little pointless. */}
-          <button
-            type='button'
-            disabled={!pdfDoc || !signature}
-            onClick={handleExport}
-            className={BUTTON_CLASS}
-          >
-            Export
-          </button>
+        <button
+          type='button'
+          disabled={!pdfDoc || !signature}
+          onClick={handleExport}
+          className={BUTTON_CLASS}
+        >
+          Export
+        </button>
 
         {fileName && <span className="text-sm text-neutral-500">{fileName}</span>}
         {/* visiblePage is a zero-based index, so it is shown +1: page numbers
