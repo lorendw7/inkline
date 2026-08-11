@@ -8,6 +8,7 @@ import type { Placement } from './lib/types'
 import { loadImageSize } from './lib/image'
 import { Rnd } from 'react-rnd'
 import { useVisiblePage } from './hooks/useVisiblePage'
+import { exportSignedPdf } from './lib/export'
 
 
 
@@ -93,6 +94,18 @@ function App() {
   const headerRef = useRef<HTMLElement>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
 
+  // The untouched bytes of the open file, kept for pdf-lib at export time.
+  // pdf.js only ever got a copy (loadPdf slices before handing over), and that
+  // copy now lives transferred inside its worker — unreachable from here. This
+  // is the other half of that bargain: the original stays on this side.
+  //
+  // A ref rather than state because nothing on screen depends on it: it is
+  // written once per file and read once per export, and neither event should
+  // re-render anything. It is also why the value can live outside the
+  // pdfDoc-cleanup effect — raw bytes hold no worker or handle to release,
+  // the garbage collector alone is enough.
+  const originalBytesRef = useRef<ArrayBuffer | null>(null);
+
   // A rendered element's height only exists once the browser has laid it out,
   // so unlike most derived values this one genuinely cannot be computed during
   // render — reading the DOM after commit is exactly what an effect is for.
@@ -147,6 +160,11 @@ function App() {
 
     const bytes = await file.arrayBuffer();
     const doc = await loadPdf(bytes);
+
+    // Stored only after loadPdf has succeeded: if parsing throws, execution
+    // never reaches this line, and the ref still holds the bytes of the
+    // document that is still on screen — the two can never disagree.
+    originalBytesRef.current = bytes;
 
     // A new document invalidates everything tied to the old one: a placement
     // names a page index that may not exist here, and activeId names a
@@ -253,6 +271,54 @@ function App() {
     setActiveId(null);
   }
 
+  /**
+   * Compose the signed PDF and hand it to the browser as a download.
+   *
+   * The export comes in two halves. exportSignedPdf() does the maths and
+   * returns bytes, knowing nothing about a browser; this function does the part
+   * that only means anything inside a page. Nothing else in the app calls
+   * document.createElement, and keeping it cornered here is what leaves the
+   * other half testable without one.
+   */
+  async function handleExport() {
+    // The button is disabled without both of these, but TypeScript does not
+    // read the disabled prop: here the ref is still `ArrayBuffer | null` and
+    // `signature` is still `string | null`. This line is what narrows them.
+    const bytes = originalBytesRef.current;
+    if (!bytes || !signature) return;
+
+    // The only await in the function; everything below is synchronous.
+    const signedBytes = await exportSignedPdf(bytes, signature, placements, DISPLAY_WIDTH);
+
+    // A Blob is bytes plus a MIME type — the browser's idea of a file. Its
+    // first argument is a list of chunks, which is why a single one still comes
+    // wrapped in an array. The copy through `new Uint8Array` is not caution:
+    // save() is typed Uint8Array<ArrayBufferLike>, which admits a
+    // SharedArrayBuffer, and Blob refuses those; re-wrapping hands it a view
+    // that is plainly ArrayBuffer-backed.
+    const blob = new Blob([new Uint8Array(signedBytes)], { type: 'application/pdf' });
+
+    // A `blob:` URL is a handle on that memory, meaningful only in this page.
+    // Downloads and <a href> speak URLs, not objects, so this is the required
+    // adapter — and one more resource the app allocates and has to give back.
+    const url = URL.createObjectURL(blob);
+
+    // The standard way to start a download from script: an anchor that is never
+    // added to the document. The `download` attribute is the whole trick — with
+    // it the browser saves the URL, without it it navigates there instead.
+    const link = document.createElement('a');
+    link.href = url;
+    const base = fileName?.replace(/\.pdf$/i, '') ?? 'document';
+    link.download = `${base}signed.pdf`;
+    link.click();
+
+    // click() has already handed the URL to the download machinery, and did so
+    // synchronously, so releasing it on the next line is safe. It is also the
+    // only thing standing between ten exports and ten entire PDFs pinned in
+    // memory until the page is reloaded.
+    URL.revokeObjectURL(url);
+  }
+
 
   return (
     <div className="min-h-screen bg-neutral-100">
@@ -305,6 +371,20 @@ function App() {
         >
           Place on this page
         </button>
+
+        {/* Turns the placements back into a file. Disabled without a document
+            or a signature, which is as far as the check goes: with every
+            placement deleted the export still runs and simply writes the
+            document back out unchanged — harmless, if a little pointless. */}
+          <button
+            type='button'
+            disabled={!pdfDoc || !signature}
+            onClick={handleExport}
+            className={BUTTON_CLASS}
+          >
+            Export
+          </button>
+
         {fileName && <span className="text-sm text-neutral-500">{fileName}</span>}
         {/* visiblePage is a zero-based index, so it is shown +1: page numbers
             are for people. `tabular-nums` gives the digits a fixed width, so
