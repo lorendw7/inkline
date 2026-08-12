@@ -137,10 +137,24 @@ function App() {
   // so unlike most derived values this one genuinely cannot be computed during
   // render — reading the DOM after commit is exactly what an effect is for.
   //
-  // The empty dependency array means "run once, after the first commit". That
-  // is enough here because every child of the header has a fixed height, so the
-  // header's own height cannot change; the day one of them wraps or grows, this
-  // has to become a ResizeObserver instead.
+  // This measured once, on the stated assumption that the header could never
+  // change height. `flex-wrap` ended that: on a narrow screen the buttons fall
+  // onto a second row and the header grows by one. Two things read this number
+  // and both would have been quietly wrong — the observer that decides which
+  // page you are looking at, and the `top` of the error banner, which would
+  // have slid up behind the header it is supposed to sit below.
+  //
+  // The empty dependency array survived the change and now says something
+  // different. It used to mean "measure once and trust it"; it now means "set
+  // up one subscription", and the subscription is what answers every later
+  // question. An effect that establishes a listener almost always has empty
+  // deps — the listener, not the effect, is what re-runs.
+  //
+  // getBoundingClientRect() inside the callback rather than the entry's
+  // contentRect: contentRect is the *content* box and excludes padding and
+  // border, which here is py-3 and a bottom border — 25px of header that would
+  // silently stop being accounted for. Changing the mechanism is not a licence
+  // to change the measurement.
   //
   // useEffect rather than useLayoutEffect: the number never reaches the screen,
   // it only configures the observer, so there is no flicker to race against and
@@ -149,7 +163,15 @@ function App() {
   // real number, before the user could have scrolled anywhere.
   useEffect(() => {
     const header = headerRef.current;
-    if (header) setHeaderHeight(header.getBoundingClientRect().height);
+    if (!header) return;
+
+    const observer = new ResizeObserver(() => {
+      setHeaderHeight(header.getBoundingClientRect().height);
+    });
+    observer.observe(header);
+
+
+    return () => observer.disconnect();
   }, []);
 
   // Called unconditionally, even with no document open: hooks are matched up
@@ -441,8 +463,18 @@ function App() {
 
   return (
     <div className="min-h-screen bg-neutral-100">
+      {/* `flex-wrap` is the whole mobile story for this row: a flex container
+          defaults to nowrap and would rather squash its children than let them
+          onto a second line, which on a phone means four buttons fighting over
+          390 pixels. Letting it wrap is also what forced the measurement above
+          to become a ResizeObserver — the height of this element stopped being
+          a constant the moment this class was added.
+
+          The unprefixed values are the phone; `sm:` overrides them from 640px
+          up. That order is not a style preference — an unprefixed utility has
+          no media query, so it is the only one that can serve as the base. */}
       <header ref={headerRef} className='sticky top-0 z-10
-      flex items-center gap-4 border-b border-neutral-200 bg-white px-6 py-3'>
+      flex flex-wrap items-center gap-2 sm:gap-4 border-b border-neutral-200 bg-white px-4 sm:px-6 py-3'>
         <h1 className="text-lg font-semibold">
           Inkline
         </h1>
@@ -488,7 +520,23 @@ function App() {
           onClick={() => signature && addPlacement(signature, visiblePage)}
           className={BUTTON_CLASS}
         >
-          Place on this page
+          {/* The label is the longest thing in the header and the first to
+              cause trouble on a phone, but CSS cannot rewrite text — so both
+              versions are in the markup and one is hidden. Exactly one is
+              displayed at any width: the short one has no base display of its
+              own and simply goes away from 640px up, the long one starts
+              hidden and is switched back on there.
+
+              `hidden` and not `opacity-0` or `sr-only`, because display:none
+              is the only one of the three that also removes the element from
+              the accessibility tree. With either of the others a screen reader
+              would read the label twice. Note `sm:inline` rather than
+              sm:block — restoring a display means restoring the one the
+              element started with, which for a <span> is inline. */}
+          <span className='sm:hidden'>Place</span>
+          <span
+          className='hidden sm:inline'
+          >Place on this page</span>
         </button>
 
         {/* Turns the placements back into a file. Disabled without a document
@@ -504,7 +552,11 @@ function App() {
           {isExporting ? 'Exporting…' : 'Export'}
         </button>
 
-        {fileName && <span className="text-sm text-neutral-500">{fileName}</span>}
+        {/* `truncate` is three declarations at once — nowrap, overflow hidden,
+            ellipsis — and none of them can do anything without a width to
+            overflow, which is what max-w-40 supplies. The pair is the unit; a
+            lone `truncate` is the most common way to write nothing at all. */}
+        {fileName && <span className="max-w-40 truncate text-sm text-neutral-500 sm:max-w-none">{fileName}</span>}
         {/* visiblePage is a zero-based index, so it is shown +1: page numbers
             are for people. `tabular-nums` gives the digits a fixed width, so
             nothing beside them shifts when 9 rolls over to 10. */}
@@ -520,7 +572,7 @@ function App() {
           (
             <img src={signature}
               alt="Your signature"
-              className='ml-auto h-8 rounded border border-neutral-200 bg-white' />
+              className='sm:ml-auto h-8 rounded border border-neutral-200 bg-white' />
           )
         }
       </header>

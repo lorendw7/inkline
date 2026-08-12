@@ -82,10 +82,12 @@ domain root, which under Pages belongs to the account, not to this repository.
       failing silently, the empty screen before a file is picked now introduces
       the four steps instead of sitting blank, an export that cannot finish says
       why rather than leaving a dead button, and a placed signature can be
-      selected and let go of; still to come is a layout that survives a phone
-      screen. Keyboard shortcuts were dropped rather than deferred — every
-      command they would have carried is one click away on an object the user
-      already has under the pointer
+      selected and let go of, and the header now wraps onto a second row rather
+      than overflowing a phone; still to come is the page itself, which is
+      rendered at a fixed 800px and is the one number the export maths is
+      written against. Keyboard shortcuts were dropped rather than deferred —
+      every command they would have carried is one click away on an object the
+      user already has under the pointer
 
 Deployment came early, out of milestone order — the site has been live on GitHub
 Pages since Milestone 1, so every step since has been verified in production
