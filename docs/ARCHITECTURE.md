@@ -25,7 +25,9 @@ Two libraries, two jobs, deliberately separated:
 
 State lives in `App.tsx` and is plain serializable data (`ArrayBuffer`, data URL string, `Placement[]`). Components are views over it.
 
-Failures cross the same boundary as values. `lib/pdf.ts` owns every mention of pdf.js, its exception classes included, and hands the app a finished sentence rather than an error object to interrogate — so `App.tsx` imports nothing from `pdfjs-dist` but a type, and the UI never has to know which library was disappointed. The raw error still goes to the console; only the sentence goes on screen.
+Failures cross the same boundary as values. Each `lib` module owns every mention of its library, exception classes included, and hands the app a finished sentence rather than an error object to interrogate: `describeLoadError` in `lib/pdf.ts` for opening, `describeExportError` in `lib/export.ts` for saving. So `App.tsx` imports nothing from `pdfjs-dist` but a type and nothing from `pdf-lib` at all, and the UI never has to know which library was disappointed. The raw error still goes to the console; only the sentence goes on screen.
+
+That split earned itself the day the second source of failures arrived: the banner reads one `error` string and has never known where it came from, so gaining an entire second failure path added one `catch` and changed no rendering code at all.
 
 ## The two coordinate systems
 
@@ -58,7 +60,7 @@ Keep this in one pure function in `src/lib/coords.ts` and unit-test it mentally 
 - **CSS px vs device px.** Do the math in CSS pixels (what react-rnd reports). If you render pdf.js canvases at `devicePixelRatio` for sharpness, that only changes `canvas.width` vs its CSS width — your `scale` must be based on the **CSS** width.
 - **Detached ArrayBuffer.** pdf.js may transfer the buffer to its worker. Hand pdf.js a copy (`bytes.slice(0)`) and keep the original for pdf-lib.
 - **Rotated pages.** `/Rotate 90/180/270` changes what "up" means. pdf.js viewports bake rotation in; pdf-lib's `drawImage` does not. MVP: detect `page.getRotation()` and warn; full support means remapping x/y per rotation case and passing `rotate:` to `drawImage`.
-- **Encrypted PDFs.** `PDFDocument.load` throws on encrypted files (`{ ignoreEncryption: true }` exists but output may be broken). In practice pdf.js rejects first, at open time, so the export path never sees one — but the guard belongs in both, because only the open path is protected by a UI that refuses to go further.
+- **Encrypted PDFs — and the two definitions of the word.** The open path does *not* protect the export path, and the reason is that the two libraries are answering different questions. pdf.js refuses only a document whose content needs a password to be read; `PDFDocument.load` refuses any document carrying encryption at all. A file with an owner password and no user password — "read it, but do not edit it", which describes most restricted documents — therefore opens, renders, accepts a signature, and fails only at export with `EncryptedPDFError`. Hence a `describe*` on both sides rather than one guard at the door. (`{ ignoreEncryption: true }` would push straight through, but overriding a restriction its author declared is a product decision, not a bug fix.)
 
 ## Why no backend
 

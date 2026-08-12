@@ -25,7 +25,11 @@ A browser-based PDF signing tool. Open a PDF, draw your signature, drag and resi
 
 Known limits: pages with a `/Rotate` value other than 0 are not repositioned
 correctly yet, and encrypted PDFs cannot be opened at all — picking one gets you
-a message saying so rather than a password prompt.
+a message saying so rather than a password prompt. A document protected against
+*editing* rather than against reading is the awkward middle case: it opens and
+displays like any other, and only the export is refused, because the two
+libraries draw the line in different places (see
+[Architecture Notes](docs/ARCHITECTURE.md)). It says so instead of doing nothing.
 
 ## Tech Stack
 
@@ -74,10 +78,11 @@ domain root, which under Pages belongs to the account, not to this repository.
 - [x] **Milestone 3 — Placement**: drag, resize and delete signature overlays with react-rnd, on any page and any number of times
 - [x] **Milestone 4 — Export**: compose and download the signed PDF with pdf-lib (unrotated pages only — see [Architecture Notes](docs/ARCHITECTURE.md))
 - [ ] **Milestone 5 — Polish** (in progress): site identity — icon, page title
-      and link-preview metadata — is done, and so is failing to open a file
-      without failing silently; still to come are an empty state, an in-app
-      guide for first-time visitors, loading feedback during export, keyboard
-      shortcuts (`Delete`, `Esc`), and a layout that survives a phone screen
+      and link-preview metadata — is done, so is failing to open a file without
+      failing silently, the empty screen before a file is picked now introduces
+      the four steps instead of sitting blank, and an export that cannot finish
+      says why rather than leaving a dead button; still to come are keyboard
+      shortcuts (`Delete`, `Esc`) and a layout that survives a phone screen
 
 Deployment came early, out of milestone order — the site has been live on GitHub
 Pages since Milestone 1, so every step since has been verified in production
@@ -100,7 +105,7 @@ src/
     useDevicePixelRatio.ts   # Tracks devicePixelRatio so pages redraw on a monitor change
   lib/
     pdf.ts                   # pdf.js: load, display scale, render a page, name a failure
-    export.ts                # pdf-lib: embed the signature and save new bytes
+    export.ts                # pdf-lib: embed the signature, save new bytes, name a failure
     coords.ts                # CSS pixels (top-left) <-> PDF points (bottom-left)
     image.ts                 # Natural size of a data URL, for the aspect ratio
     types.ts                 # Placement — the shape both the overlay and the export read

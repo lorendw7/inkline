@@ -8,7 +8,7 @@ import type { Placement } from './lib/types'
 import { loadImageSize } from './lib/image'
 import { Rnd } from 'react-rnd'
 import { useVisiblePage } from './hooks/useVisiblePage'
-import { exportSignedPdf } from './lib/export'
+import { describeExportError, exportSignedPdf } from './lib/export'
 
 
 
@@ -75,9 +75,18 @@ function App() {
 
   // A finished sentence to show the reader, or null for "nothing is wrong".
   // Deliberately a string and not the error object: what went wrong is decided
-  // in lib/pdf.ts, next to the library that knows, and only the wording travels
-  // up here. Nothing in the UI ever branches on which failure it was.
+  // in whichever lib module owns the library that failed — pdf.ts for opening,
+  // export.ts for saving — and only the wording travels up here. Nothing in the
+  // UI ever branches on which failure it was, which is exactly why gaining a
+  // second source of failures cost this component almost nothing: one more
+  // describe* call at one more catch site, and the banner below never noticed.
   const [error, setError] = useState<string | null>(null);
+
+  // Whether an export is in flight. Two jobs at once, and the second is the
+  // one that matters: it tells the reader something is happening, and it holds
+  // the Export button shut while it does. Without the latter, a slow document
+  // invites the impatient third click and composes the whole file three times.
+  const [isExporting, setIsExporting] = useState(false);
 
   // ---------------------------------------------------------------------
   // "Which page am I looking at?" — three pieces that only make sense
@@ -330,42 +339,51 @@ function App() {
     // `signature` is still `string | null`. This line is what narrows them.
     const bytes = originalBytesRef.current;
     if (!bytes || !signature) return;
+    setError(null);
+    setIsExporting(true);
 
-    // The only await in the function; everything below is synchronous.
-    const signedBytes = await exportSignedPdf(bytes, signature, placements, DISPLAY_WIDTH);
+    try {
+      // The only await in the function; everything below is synchronous.
+      const signedBytes = await exportSignedPdf(bytes, signature, placements, DISPLAY_WIDTH);
 
-    // A Blob is bytes plus a MIME type — the browser's idea of a file. Its
-    // first argument is a list of chunks, which is why a single one still comes
-    // wrapped in an array. The copy through `new Uint8Array` is not caution:
-    // save() is typed Uint8Array<ArrayBufferLike>, which admits a
-    // SharedArrayBuffer, and Blob refuses those; re-wrapping hands it a view
-    // that is plainly ArrayBuffer-backed.
-    const blob = new Blob([new Uint8Array(signedBytes)], { type: 'application/pdf' });
+      // A Blob is bytes plus a MIME type — the browser's idea of a file. Its
+      // first argument is a list of chunks, which is why a single one still comes
+      // wrapped in an array. The copy through `new Uint8Array` is not caution:
+      // save() is typed Uint8Array<ArrayBufferLike>, which admits a
+      // SharedArrayBuffer, and Blob refuses those; re-wrapping hands it a view
+      // that is plainly ArrayBuffer-backed.
+      const blob = new Blob([new Uint8Array(signedBytes)], { type: 'application/pdf' });
 
-    // A `blob:` URL is a handle on that memory, meaningful only in this page.
-    // Downloads and <a href> speak URLs, not objects, so this is the required
-    // adapter — and one more resource the app allocates and has to give back.
-    const url = URL.createObjectURL(blob);
+      // A `blob:` URL is a handle on that memory, meaningful only in this page.
+      // Downloads and <a href> speak URLs, not objects, so this is the required
+      // adapter — and one more resource the app allocates and has to give back.
+      const url = URL.createObjectURL(blob);
 
-    // The standard way to start a download from script: an anchor that is never
-    // added to the document. The `download` attribute is the whole trick — with
-    // it the browser saves the URL, without it it navigates there instead.
-    const link = document.createElement('a');
-    link.href = url;
-    // The suggested name, derived so the download sits next to its original in
-    // a folder: contract.pdf becomes contract-signed.pdf. The regex is anchored
-    // with `$` and case-insensitive, so only a real trailing extension goes —
-    // pdf-notes.pdf keeps the word in the middle. `?? 'document'` covers the
-    // case that cannot currently happen, a file open with no name recorded.
-    const base = fileName?.replace(/\.pdf$/i, '') ?? 'document';
-    link.download = `${base}-signed.pdf`;
-    link.click();
+      // The standard way to start a download from script: an anchor that is never
+      // added to the document. The `download` attribute is the whole trick — with
+      // it the browser saves the URL, without it it navigates there instead.
+      const link = document.createElement('a');
+      link.href = url;
+      // The suggested name, derived so the download sits next to its original in
+      // a folder: contract.pdf becomes contract-signed.pdf. The regex is anchored
+      // with `$` and case-insensitive, so only a real trailing extension goes —
+      // pdf-notes.pdf keeps the word in the middle. `?? 'document'` covers the
+      // case that cannot currently happen, a file open with no name recorded.
+      const base = fileName?.replace(/\.pdf$/i, '') ?? 'document';
+      link.download = `${base}-signed.pdf`;
+      link.click();
 
-    // click() has already handed the URL to the download machinery, and did so
-    // synchronously, so releasing it on the next line is safe. It is also the
-    // only thing standing between ten exports and ten entire PDFs pinned in
-    // memory until the page is reloaded.
-    URL.revokeObjectURL(url);
+      // click() has already handed the URL to the download machinery, and did so
+      // synchronously, so releasing it on the next line is safe. It is also the
+      // only thing standing between ten exports and ten entire PDFs pinned in
+      // memory until the page is reloaded.
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      setError(describeExportError(err));
+    } finally {
+      setIsExporting(false);
+    }
   }
 
 
@@ -427,11 +445,11 @@ function App() {
             document back out unchanged — harmless, if a little pointless. */}
         <button
           type='button'
-          disabled={!pdfDoc || !signature}
+          disabled={!pdfDoc || !signature || isExporting}
           onClick={handleExport}
           className={BUTTON_CLASS}
         >
-          Export
+          {isExporting ? 'Exporting…' : 'Export'}
         </button>
 
         {fileName && <span className="text-sm text-neutral-500">{fileName}</span>}

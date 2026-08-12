@@ -6,7 +6,7 @@
  * real PDF image and the document itself is never rasterised, so its text stays
  * text and the file stays small.
  */
-import { PDFDocument } from 'pdf-lib';
+import { EncryptedPDFError, PDFDocument } from 'pdf-lib';
 import type { Placement } from './types';
 import { placementToPdfRect } from './coords';
 
@@ -75,4 +75,29 @@ export async function exportSignedPdf(
     // No `await`: returning a promise from an async function chains it, and the
     // caller's single await settles both.
     return doc.save();
+}
+
+/**
+ * Turn an exportSignedPdf() failure into a sentence worth showing a person.
+ *
+ * The mirror of describeLoadError, and here for the same three reasons: a
+ * library's exception classes are an implementation detail, `instanceof`
+ * silently returns false when a package is loaded twice through different entry
+ * points — so the check has to sit beside the call that produced the error —
+ * and err.message is written for developers, not for readers.
+ *
+ * The encrypted branch is not symmetry for its own sake. pdf.js and pdf-lib
+ * disagree about what the word means: pdf.js refuses only a document whose
+ * *content* needs a password, while PDFDocument.load refuses any document
+ * carrying encryption at all. So a file with an owner password and no user
+ * password — the "read this, but do not edit it" kind, which is most of the
+ * restricted documents in the world — opens cleanly, renders, accepts a
+ * signature, and fails here. Without this branch the user does the entire job
+ * and gets back nothing but a silent button.
+ */
+export function describeExportError(err: unknown): string {
+    if (err instanceof EncryptedPDFError) {
+        return 'This PDF is protected against editing. Inkline can display it, but cannot write out a signed copy.';
+    }
+    return 'The signed PDF could not be created. Try another file.';
 }
