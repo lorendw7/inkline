@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import { loadPdf } from './lib/pdf'
+import { describeLoadError, loadPdf } from './lib/pdf'
 import { PdfPage } from './components/PdfPage'
 import { SignaturePadModal } from './components/SignaturePadModal'
 import type { Placement } from './lib/types'
@@ -9,6 +9,7 @@ import { loadImageSize } from './lib/image'
 import { Rnd } from 'react-rnd'
 import { useVisiblePage } from './hooks/useVisiblePage'
 import { exportSignedPdf } from './lib/export'
+
 
 
 
@@ -71,6 +72,12 @@ function App() {
   // highlight for now, but it is also the "selected" notion the delete button
   // and the Delete key will need.
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // A finished sentence to show the reader, or null for "nothing is wrong".
+  // Deliberately a string and not the error object: what went wrong is decided
+  // in lib/pdf.ts, next to the library that knows, and only the wording travels
+  // up here. Nothing in the UI ever branches on which failure it was.
+  const [error, setError] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------
   // "Which page am I looking at?" — three pieces that only make sense
@@ -154,29 +161,66 @@ function App() {
     return () => void pdfDoc?.loadingTask.destroy();
   }, [pdfDoc])
 
+  /**
+   * Open the file the user picked, or say why that did not work.
+   *
+   * Every failure here used to be silent. An `async` handler's exceptions do
+   * not escape into the click that started it: they become the rejection of the
+   * promise it returns, and React discards that promise unread. The result was
+   * a console warning and a screen that did not move — so a try/catch is not
+   * tidiness, it is the only thing standing between a bad file and no feedback
+   * at all.
+   */
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    // Pinned once, then used for the rest of the function. The element is what
+    // the `finally` below needs, and by then two awaits have passed; naming it
+    // here means nothing downstream has to reason about how long a React
+    // synthetic event stays valid.
+    const input = event.target;
+    const file = input.files?.[0];
     if (!file) return; // the dialog was opened and cancelled
 
-    const bytes = await file.arrayBuffer();
-    const doc = await loadPdf(bytes);
+    // Before the first await, so a stale message clears the instant the user
+    // picks something rather than when the read finishes.
+    setError(null);
+    try {
+      const bytes = await file.arrayBuffer();
+      const doc = await loadPdf(bytes);
 
-    // Stored only after loadPdf has succeeded: if parsing throws, execution
-    // never reaches this line, and the ref still holds the bytes of the
-    // document that is still on screen — the two can never disagree.
-    originalBytesRef.current = bytes;
+      // Stored only after loadPdf has succeeded: if parsing throws, execution
+      // never reaches this line, and the ref still holds the bytes of the
+      // document that is still on screen — the two can never disagree.
+      originalBytesRef.current = bytes;
 
-    // A new document invalidates everything tied to the old one: a placement
-    // names a page index that may not exist here, and activeId names a
-    // placement that is about to be dropped. React batches every setState in
-    // this function into a single re-render — even after an await — so there is
-    // no frame where the new pages are on screen under stale overlays.
-    setPlacements([]);
-    setActiveId(null);
+      // A new document invalidates everything tied to the old one: a placement
+      // names a page index that may not exist here, and activeId names a
+      // placement that is about to be dropped. React batches every setState in
+      // this function into a single re-render — even after an await — so there is
+      // no frame where the new pages are on screen under stale overlays.
+      setPlacements([]);
+      setActiveId(null);
 
-    // Storing the document re-renders App, which mounts one PdfPage per page.
-    setPdfDoc(doc);
-    setFileName(file.name);
+      // Storing the document re-renders App, which mounts one PdfPage per page.
+      setPdfDoc(doc);
+      setFileName(file.name);
+      // Nothing here rolls anything back, because nothing was changed until it
+      // could not fail: `bytes` and `doc` both exist before the first
+      // assignment above. A throw lands below with the previous document still
+      // whole and still on screen.
+    } catch (err) {
+      // Two audiences, two channels. The console keeps the error object, stack
+      // and all; the banner gets a sentence, and lib/pdf.ts is what decides
+      // which one — see describeLoadError.
+      console.error(err);
+      setError(describeLoadError(err));
+    } finally {
+      // A file input fires `change` only when its value changes, so picking the
+      // same file twice in a row is silence — which is exactly what someone
+      // does after being told the file is broken and assuming they misclicked.
+      // Emptying it makes the next pick a change again, whichever way this one
+      // ended.
+      input.value = '';
+    }
 
   }
 
@@ -410,6 +454,34 @@ function App() {
           )
         }
       </header>
+      {/* Outside the header on purpose. The header is sticky, and the effect
+          that measures it runs once on the assumption that it can never change
+          height — a banner appearing inside it would break that quietly, and
+          the visible-page offset with it. Out here it scrolls away with the
+          page, which is a fair trade for a message the reader is looking
+          straight at.
+
+          `role="alert"` makes this an assertive live region: a screen reader
+          announces it the moment the node appears, which is why the whole
+          element is conditional rather than always present and sometimes
+          empty — a live region that was already there may never be read. */}
+      {
+        error && (<div role='alert'
+          className='flex items-center gap-3 
+          mx-8 mt-4 px-4 py-3 rounded-md border border-red-200 bg-red-50 text-red-800 
+          text-sm'>
+          <span>
+            {error}
+          </span>
+          <button
+            type='button'
+            onClick={() => setError(null)}
+            aria-label='Dismiss'
+            className='ml-auto rounded px-2 text-lg leading-none hover:bg-red-100'>
+            ×
+          </button>
+        </div>)
+      }
       {/* The element useVisiblePage searches. It only needs an ancestor of the
           pages, and this one already exists — no wrapper was added for it. */}
       <div ref={pagesRef} className='flex flex-col items-center gap-6 p-8'>

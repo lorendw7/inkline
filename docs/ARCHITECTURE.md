@@ -25,6 +25,8 @@ Two libraries, two jobs, deliberately separated:
 
 State lives in `App.tsx` and is plain serializable data (`ArrayBuffer`, data URL string, `Placement[]`). Components are views over it.
 
+Failures cross the same boundary as values. `lib/pdf.ts` owns every mention of pdf.js, its exception classes included, and hands the app a finished sentence rather than an error object to interrogate — so `App.tsx` imports nothing from `pdfjs-dist` but a type, and the UI never has to know which library was disappointed. The raw error still goes to the console; only the sentence goes on screen.
+
 ## The two coordinate systems
 
 This is the only genuinely tricky code in the project.
@@ -56,7 +58,7 @@ Keep this in one pure function in `src/lib/coords.ts` and unit-test it mentally 
 - **CSS px vs device px.** Do the math in CSS pixels (what react-rnd reports). If you render pdf.js canvases at `devicePixelRatio` for sharpness, that only changes `canvas.width` vs its CSS width — your `scale` must be based on the **CSS** width.
 - **Detached ArrayBuffer.** pdf.js may transfer the buffer to its worker. Hand pdf.js a copy (`bytes.slice(0)`) and keep the original for pdf-lib.
 - **Rotated pages.** `/Rotate 90/180/270` changes what "up" means. pdf.js viewports bake rotation in; pdf-lib's `drawImage` does not. MVP: detect `page.getRotation()` and warn; full support means remapping x/y per rotation case and passing `rotate:` to `drawImage`.
-- **Encrypted PDFs.** `PDFDocument.load` throws on encrypted files (`{ ignoreEncryption: true }` exists but output may be broken). Catch and tell the user.
+- **Encrypted PDFs.** `PDFDocument.load` throws on encrypted files (`{ ignoreEncryption: true }` exists but output may be broken). In practice pdf.js rejects first, at open time, so the export path never sees one — but the guard belongs in both, because only the open path is protected by a UI that refuses to go further.
 
 ## Why no backend
 

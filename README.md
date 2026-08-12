@@ -24,7 +24,8 @@ A browser-based PDF signing tool. Open a PDF, draw your signature, drag and resi
 4. **Export** — downloads the signed PDF. The document's own text stays text: the signature is added as an image, the page is never flattened to a picture.
 
 Known limits: pages with a `/Rotate` value other than 0 are not repositioned
-correctly yet, and encrypted PDFs cannot be opened at all.
+correctly yet, and encrypted PDFs cannot be opened at all — picking one gets you
+a message saying so rather than a password prompt.
 
 ## Tech Stack
 
@@ -73,10 +74,10 @@ domain root, which under Pages belongs to the account, not to this repository.
 - [x] **Milestone 3 — Placement**: drag, resize and delete signature overlays with react-rnd, on any page and any number of times
 - [x] **Milestone 4 — Export**: compose and download the signed PDF with pdf-lib (unrotated pages only — see [Architecture Notes](docs/ARCHITECTURE.md))
 - [ ] **Milestone 5 — Polish** (in progress): site identity — icon, page title
-      and link-preview metadata — is done; still to come are error and empty
-      states, an in-app guide for first-time visitors, loading feedback during
-      export, keyboard shortcuts (`Delete`, `Esc`), and a layout that survives a
-      phone screen
+      and link-preview metadata — is done, and so is failing to open a file
+      without failing silently; still to come are an empty state, an in-app
+      guide for first-time visitors, loading feedback during export, keyboard
+      shortcuts (`Delete`, `Esc`), and a layout that survives a phone screen
 
 Deployment came early, out of milestone order — the site has been live on GitHub
 Pages since Milestone 1, so every step since has been verified in production
@@ -98,7 +99,7 @@ src/
     useVisiblePage.ts        # Which page the reader is looking at, via IntersectionObserver
     useDevicePixelRatio.ts   # Tracks devicePixelRatio so pages redraw on a monitor change
   lib/
-    pdf.ts                   # pdf.js: load, display scale, render a page
+    pdf.ts                   # pdf.js: load, display scale, render a page, name a failure
     export.ts                # pdf-lib: embed the signature and save new bytes
     coords.ts                # CSS pixels (top-left) <-> PDF points (bottom-left)
     image.ts                 # Natural size of a data URL, for the aspect ratio

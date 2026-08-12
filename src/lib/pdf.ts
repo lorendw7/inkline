@@ -69,7 +69,7 @@ export function renderPage(
   // Rasterise at device resolution. `scale` on its own yields one bitmap pixel
   // per CSS pixel, which the browser would then have to stretch across `dpr`
   // physical pixels — the cause of blurry text on high-DPI screens.
-  const viewport = page.getViewport({scale: scale * dpr});
+  const viewport = page.getViewport({ scale: scale * dpr });
 
   // Two independent sizes. The bitmap takes the extra device pixels so that one
   // bitmap pixel lands on exactly one physical pixel; the CSS size divides them
@@ -81,5 +81,29 @@ export function renderPage(
 
   // pdfjs-dist v6 prefers `canvas`; `canvasContext` is kept only for backwards
   // compatibility.
-  return page.render({canvas, viewport});
+  return page.render({ canvas, viewport });
+}
+
+/**
+ * Turn a loadPdf() failure into a sentence worth showing a person.
+ *
+ * Lives here rather than in the component for the same reason the rest of this
+ * module does: pdf.js's exception classes are an implementation detail, and an
+ * `instanceof` against them is a runtime dependency the UI should not carry.
+ * Keeping the check beside the getDocument() call that produced it also keeps
+ * both sides on one copy of pdfjs — `instanceof` silently returns false when a
+ * package is loaded twice through different entry points.
+ *
+ * The caller gets the string; the original error is theirs to log. Nothing here
+ * returns err.message: pdf.js writes those for developers, not for readers.
+ */
+export function describeLoadError(err: unknown): string {
+  if (err instanceof pdfjs.PasswordException) {
+    return 'This PDF is password-protected. Inkline cannot open encrypted files.';
+  }
+  if (err instanceof pdfjs.InvalidPDFException) {
+    return 'This file is not a valid PDF. It may be damaged, or not a PDF at all.';
+  }
+
+  return 'The file could not be opened. Try another one.';
 }
