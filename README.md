@@ -1,21 +1,35 @@
 # Inkline
 
-A browser-based PDF signing tool. Upload a PDF, draw or upload your signature, drag and resize it into position, and export a flattened, signed PDF — entirely client-side. No server, no upload of your documents, and none of the color-rendering bugs that iOS Markup is known for.
+[![Deploy to GitHub Pages](https://github.com/lorendw7/inkline/actions/workflows/deploy.yml/badge.svg)](https://github.com/lorendw7/inkline/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Live demo](https://img.shields.io/badge/demo-lorendw7.github.io%2Finkline-black)](https://lorendw7.github.io/inkline/)
+
+A browser-based PDF signing tool. Open a PDF, draw your signature, drag and resize it into position, and export a signed PDF — entirely client-side. No server, no upload of your documents, and none of the color-rendering bugs that iOS Markup is known for.
 
 **Live: [lorendw7.github.io/inkline](https://lorendw7.github.io/inkline/)**
 
-## Features (MVP)
+## Features
 
-- **Upload a PDF** and preview every page in the browser
-- **Draw a signature** on a canvas pad (or upload a PNG with transparency)
-- **Place the signature** anywhere on any page — drag to move, resize to scale
-- **Export** a new PDF with the signature flattened in, downloaded locally
+- **Open a PDF** and preview every page in the browser
+- **Draw a signature** on a canvas pad — saved as a transparent PNG
+- **Place it anywhere**, on any page, as many times as you like — drag to move, resize to scale, delete with the × button
+- **Export** a new PDF with the signature drawn into the page, downloaded as `<name>-signed.pdf`
 - **100% client-side** — your document never leaves your machine
+
+## How to use
+
+1. **Open PDF** — pick a file. Nothing is uploaded anywhere; the file is read straight into the page.
+2. **Sign** — draw your signature in the modal and confirm. The first copy lands on the page you are looking at.
+3. **Place on this page** — drops another copy of the same signature on the current page. Drag it, grab a corner to resize it, or hover it and hit × to remove it.
+4. **Export** — downloads the signed PDF. The document's own text stays text: the signature is added as an image, the page is never flattened to a picture.
+
+Known limits: pages with a `/Rotate` value other than 0 are not repositioned
+correctly yet, and encrypted PDFs cannot be opened at all.
 
 ## Tech Stack
 
 | Concern | Choice | Why |
-|---|---|---|
+| --- | --- | --- |
 | Framework | React 19 + Vite | Lightweight SPA; no SSR needed for a single-page tool |
 | Language | TypeScript | |
 | PDF rendering | [pdf.js](https://mozilla.github.io/pdf.js/) (`pdfjs-dist`) | Renders PDF pages to `<canvas>` for preview and placement |
@@ -24,7 +38,7 @@ A browser-based PDF signing tool. Upload a PDF, draw or upload your signature, d
 | Drag / resize | [react-rnd](https://github.com/bokuweb/react-rnd) | Free-form move + resize of the signature overlay |
 | Styling | Tailwind CSS v4 | Utility-first, wired via the `@tailwindcss/vite` plugin |
 | Linting | Oxlint | Ships with the Vite template |
-| Deployment | Vercel / GitHub Pages | Static site, zero cost |
+| Deployment | GitHub Pages | Static site, zero cost, published by Actions on every push to `main` |
 
 ## Getting Started
 
@@ -48,16 +62,22 @@ without it every asset URL would 404. The build output is never committed.
 
 - [x] **Milestone 0 — Scaffold**: Vite + React + TypeScript + Tailwind v4, all core libraries installed
 - [x] **Milestone 1 — PDF rendering**: load a file and render every page to canvas with pdf.js, at device pixel density
-- [x] **Milestone 2 — Signature pad**: draw a transparent-PNG signature in a modal (uploading an existing PNG is still open)
+- [x] **Milestone 2 — Signature pad**: draw a transparent-PNG signature in a modal
 - [x] **Milestone 3 — Placement**: drag, resize and delete signature overlays with react-rnd, on any page and any number of times
 - [x] **Milestone 4 — Export**: compose and download the signed PDF with pdf-lib (unrotated pages only — see [Architecture Notes](docs/ARCHITECTURE.md))
-- [ ] **Milestone 5 — Polish**: error states, keyboard shortcuts, responsive UI adaptation for mobile devices and different screen sizes, deployment
+- [ ] **Milestone 5 — Polish** (in progress): error and empty states, an in-app
+      guide for first-time visitors, loading feedback during export, keyboard
+      shortcuts (`Delete`, `Esc`), and a layout that survives a phone screen
+
+Deployment came early, out of milestone order — the site has been live on GitHub
+Pages since Milestone 1, so every step since has been verified in production
+rather than only on localhost.
 
 See the [Development Guide](docs/GUIDE.md) for what each milestone involves.
 
 ## Project Structure
 
-```
+```text
 src/
   App.tsx                    # All state (pdf doc, original bytes, signature, placements) and the header
   components/
@@ -87,6 +107,8 @@ composes, and `Placement[]` is the plain data both sides agree on.
 
 ## Roadmap (post-MVP)
 
+- Upload an existing signature PNG instead of drawing one — a `FileReader.readAsDataURL` away, since everything downstream already speaks data URLs
+- Rotated-page support (`/Rotate` 90/180/270), which needs the placement remapped per case and `rotate:` passed to `drawImage`
 - Multiple signatures / initials / date stamps
 - Saved signature library (localStorage)
 - Multi-party signing and cloud archive (would require a small Node/Express backend + object storage such as S3/R2 — deliberately out of scope for the MVP)
