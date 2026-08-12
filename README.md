@@ -15,7 +15,7 @@ A browser-based PDF signing tool. Open a PDF, draw your signature, drag and resi
 - **Place it anywhere**, on any page, as many times as you like — click to select, drag to move, resize to scale, delete with the × button
 - **Export** a new PDF with the signature drawn into the page, downloaded as `<name>-signed.pdf`
 - **Works on a phone** — pages are drawn at whatever width the screen has, and a placement is stored in units that survive a resize or a rotation
-- **100% client-side** — your document never leaves your machine
+- **100% client-side** — your document never leaves your machine, and a Content Security Policy makes that the browser's rule rather than this README's promise
 
 ## How to use
 
@@ -32,6 +32,30 @@ displays like any other, and only the export is refused, because the two
 libraries draw the line in different places (see
 [Architecture Notes](docs/ARCHITECTURE.md)). It says so instead of doing nothing.
 
+## Privacy
+
+The file is read with `file.arrayBuffer()`, parsed by a bundled worker, and
+composed back into a new document by pdf-lib — all of it in memory, in your tab.
+There is no backend to upload to, and nothing is written to `localStorage`,
+`indexedDB` or a cookie: closing the tab is the delete button.
+
+That much is a claim about the code, and code changes. The build turns it into a
+rule the browser enforces, injecting a Content Security Policy whose central
+directive is `connect-src 'none'`: no `fetch`, no `XMLHttpRequest`, no
+WebSocket, no beacon, from any script on the page. Not from this app, and not
+from a dependency on the day one of them ships a compromised release — the one
+attack a client-side tool cannot audit its way out of, since the audit is only
+ever true of the versions already installed. You can check the result rather
+than take it on trust: open DevTools, sign a document end to end, and watch the
+Network panel stay empty.
+
+Two honest limits. GitHub Pages serves static files and cannot set response
+headers, so the policy travels in a `<meta>` tag — and a browser ignores
+`frame-ancestors` there, so nothing stops another site putting Inkline in an
+iframe. And a policy protects the page, not the machine: browser extensions read
+the DOM directly, and the signed PDF you download is an ordinary file in an
+ordinary folder, which whatever syncs that folder will sync.
+
 ## Tech Stack
 
 | Concern | Choice | Why |
@@ -44,6 +68,7 @@ libraries draw the line in different places (see
 | Drag / resize | [react-rnd](https://github.com/bokuweb/react-rnd) | Free-form move + resize of the signature overlay |
 | Styling | Tailwind CSS v4 | Utility-first, wired via the `@tailwindcss/vite` plugin |
 | Linting | Oxlint | Ships with the Vite template |
+| Privacy | Content Security Policy | `connect-src 'none'` makes "never leaves your machine" browser-enforced; injected into the built HTML by a ten-line plugin in `vite.config.ts` |
 | Deployment | GitHub Pages | Static site, zero cost, published by Actions on every push to `main` |
 
 ## Getting Started
@@ -70,6 +95,14 @@ URLs it can see — in `index.html` and in CSS — so `/inkline.svg` ships as
 has to be built from `import.meta.env.BASE_URL`. And the icon must be declared
 explicitly, because a browser's implicit `/favicon.ico` request goes to the
 domain root, which under Pages belongs to the account, not to this repository.
+
+The same config injects the Content Security Policy above, and only into the
+build. The dev server needs an inline script for Fast Refresh, a WebSocket for
+HMR and JS-injected `<style>` tags from Tailwind, all of which the policy
+forbids and none of which survive into the production output — so the plugin
+carries `apply: 'build'` and `npm run dev` never sees it. Which means the policy
+is one of the few things localhost cannot verify: check it against
+`npm run preview`, or against the live site.
 
 ## Project Status
 

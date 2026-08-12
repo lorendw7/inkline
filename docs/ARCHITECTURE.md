@@ -71,3 +71,7 @@ Keep this in one pure function in `src/lib/coords.ts` and unit-test it mentally 
 ## Why no backend
 
 Everything — parse, render, compose, save — runs on typed arrays in the browser. A backend only becomes necessary for multi-party workflows (shared state) or archives (storage). If added later, the front end stays unchanged; the export step would just also `POST` the bytes.
+
+The absence is enforced rather than merely intended. `vite.config.ts` injects a Content Security Policy into the built HTML, and its load-bearing directive is `connect-src 'none'`: the browser refuses every outbound request the page could make, whoever wrote the code making it. That is worth more than the audit it replaces. "No dependency exfiltrates anything" is a statement with a shelf life — it describes the versions in `package-lock.json` today — while a policy holds against the release of `pdfjs-dist` that has not been published yet.
+
+It also prices the backend in the paragraph above. Adding one stops being "the export step would just also `POST` the bytes" and becomes that plus widening `connect-src` to name the host — in a diff where the widening is the line a reviewer stops at. The privacy property is now explicit enough that giving it up has to be done on purpose.
