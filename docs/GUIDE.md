@@ -130,6 +130,10 @@ interface Placement {
 
 ## Milestone 5 — Polish
 
+- Site identity: an SVG favicon in `public/`, a real `<title>`, a description,
+  `theme-color`, and Open Graph tags for link previews. Two traps: only
+  `index.html` and CSS get Vite's `base` rewriting, and `og:image`/`og:url` must
+  be absolute URLs because crawlers have no page to resolve them against.
 - Loading states (PDF parsing, export)
 - Empty states and error handling (non-PDF file, encrypted PDF — `PDFDocument.load` throws; catch and show a message)
 - Keyboard: `Delete` removes the selected placement; `Esc` closes the pad modal

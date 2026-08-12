@@ -58,6 +58,13 @@ Pushing to `main` builds the site and publishes it to GitHub Pages via
 is served from a repository subpath, `vite.config.ts` sets `base: '/inkline/'` —
 without it every asset URL would 404. The build output is never committed.
 
+That subpath has two consequences worth knowing. Vite rewrites root-relative
+URLs it can see — in `index.html` and in CSS — so `/inkline.svg` ships as
+`/inkline/inkline.svg`; a path written inside a JS string is invisible to it and
+has to be built from `import.meta.env.BASE_URL`. And the icon must be declared
+explicitly, because a browser's implicit `/favicon.ico` request goes to the
+domain root, which under Pages belongs to the account, not to this repository.
+
 ## Project Status
 
 - [x] **Milestone 0 — Scaffold**: Vite + React + TypeScript + Tailwind v4, all core libraries installed
@@ -65,9 +72,11 @@ without it every asset URL would 404. The build output is never committed.
 - [x] **Milestone 2 — Signature pad**: draw a transparent-PNG signature in a modal
 - [x] **Milestone 3 — Placement**: drag, resize and delete signature overlays with react-rnd, on any page and any number of times
 - [x] **Milestone 4 — Export**: compose and download the signed PDF with pdf-lib (unrotated pages only — see [Architecture Notes](docs/ARCHITECTURE.md))
-- [ ] **Milestone 5 — Polish** (in progress): error and empty states, an in-app
-      guide for first-time visitors, loading feedback during export, keyboard
-      shortcuts (`Delete`, `Esc`), and a layout that survives a phone screen
+- [ ] **Milestone 5 — Polish** (in progress): site identity — icon, page title
+      and link-preview metadata — is done; still to come are error and empty
+      states, an in-app guide for first-time visitors, loading feedback during
+      export, keyboard shortcuts (`Delete`, `Esc`), and a layout that survives a
+      phone screen
 
 Deployment came early, out of milestone order — the site has been live on GitHub
 Pages since Milestone 1, so every step since has been verified in production
@@ -78,6 +87,8 @@ See the [Development Guide](docs/GUIDE.md) for what each milestone involves.
 ## Project Structure
 
 ```text
+index.html                   # The real entry point: <head> metadata and the mount node
+public/                      # Copied verbatim to the site root — icons only
 src/
   App.tsx                    # All state (pdf doc, original bytes, signature, placements) and the header
   components/

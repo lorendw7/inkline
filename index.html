@@ -1,13 +1,42 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>inkline</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Three files for one icon, and the order matters: a browser walks these in
+       document order and keeps the last `rel="icon"` it can actually decode.
+       Anything that understands `image/svg+xml` therefore lands on the vector
+       one; everything older falls back to the .ico above it. iOS reads neither
+       and wants a PNG under its own rel.
+
+       Declaring them at all is not optional here. Left to itself a browser
+       guesses `/favicon.ico` at the *domain* root, which under GitHub Pages is
+       the account's, not this repository's. These paths are root-relative and
+       resolve against `base` — see README, Deployment. -->
+  <link rel="icon" href="/favicon.ico" sizes="32x32" />
+  <link rel="icon" type="image/svg+xml" href="/inkline.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <title>Inkline — Sign PDFs in your browser</title>
+  <meta name="description"
+    content="Open a PDF, draw your signature, place it, and export a signed file. Entirely client-side — your document never leaves your machine." />
+  <!-- Tints the browser chrome on Android and iOS Safari. -->
+  <meta name="theme-color" content="#171717" />
+
+  <!-- Link previews. The one place in the file that hardcodes the domain:
+       a crawler is not a browser and has no current page to resolve a relative
+       path against, and `content` is opaque to Vite's rewriting anyway. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Inkline" />
+  <meta property="og:description" content="A browser-based PDF signing tool. No server, no upload." />
+  <meta property="og:url" content="https://lorendw7.github.io/inkline/" />
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>
