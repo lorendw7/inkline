@@ -485,87 +485,85 @@ function App() {
       {/* The element useVisiblePage searches. It only needs an ancestor of the
           pages, and this one already exists — no wrapper was added for it. */}
       <div ref={pagesRef} className='flex flex-col items-center gap-6 p-8'>
-        {/* Nothing renders before a document is loaded: `null && ...` is null,
-            and React renders null as nothing. */}
         {
-          pdfDoc &&
-          Array.from({ length: pdfDoc.numPages }, (_, index) => (
-            <PdfPage key={index} pageNumber={index + 1} pdfDoc={pdfDoc} displayWidth={DISPLAY_WIDTH}>
-              {/* Each page draws only the placements that belong to it. The
+          pdfDoc ? (
+            Array.from({ length: pdfDoc.numPages }, (_, index) => (
+              <PdfPage key={index} pageNumber={index + 1} pdfDoc={pdfDoc} displayWidth={DISPLAY_WIDTH}>
+                {/* Each page draws only the placements that belong to it. The
                   filter is what turns one flat array into per-page overlays. */}
-              {
-                placements.filter(p => p.pageIndex === index)
-                  .map(p => (
-                    // Controlled, not uncontrolled: Rnd is told where to be on
-                    // every render instead of remembering it internally. That
-                    // costs a round trip through state on each gesture, and buys
-                    // the guarantee that `placements` is never out of date —
-                    // which is the whole point, because Milestone 4 exports
-                    // these numbers and cannot reach inside Rnd to get them.
-                    <Rnd
-                      key={p.id}
-                      position={{ x: p.x, y: p.y }}
-                      size={{ width: p.width, height: p.height }}
-                      // Resolves to PdfPage's wrapper — the same element whose
-                      // `relative` makes x/y page-relative in the first place.
-                      bounds="parent"
-                      // The ratio came from the image's natural size, so locking
-                      // it is what keeps the signature from being squashed.
-                      lockAspectRatio
-                      // A mousedown anywhere inside this box normally starts a
-                      // drag, and the delete button is inside it. This selector
-                      // exempts the button, which would otherwise be almost
-                      // impossible to click without dragging the signature away.
-                      cancel='.no-drag'
-                      // Two pixels of border are always there and only the
-                      // colour changes, so the image never shifts when the
-                      // highlight appears. A border sits inside the box, which
-                      // an outline or a ring would not — those get clipped by
-                      // the page wrapper's overflow-hidden at the very edge.
-                      className={`group border-2 ${activeId === p.id ? 'border-blue-500' : 'border-transparent'}`}
-                      // The start handlers light the highlight and the stop
-                      // handlers put it out, so the two gestures share one
-                      // piece of state rather than each growing their own.
-                      onDragStart={() => setActiveId(p.id)}
-                      // `data` already carries the new top-left corner.
-                      onDragStop={(_e, data) => {
-                        setActiveId(null);
-                        updatePlacement(p.id, { x: data.x, y: data.y });
-                      }}
-                      onResizeStart={() => setActiveId(p.id)}
-                      // Position is patched alongside size because a top or left
-                      // handle pins the opposite corner and moves the origin.
-                      // Size is read off the element rather than from `_delta`,
-                      // which is only the change; parseFloat turns Rnd's
-                      // "213.5px" into a number without rounding it.
-                      onResizeStop={(_e, _dir, ref, _delta, position) => {
-                        setActiveId(null);
-                        updatePlacement(p.id, {
-                          width: parseFloat(ref.style.width),
-                          height: parseFloat(ref.style.height),
-                          x: position.x,
-                          y: position.y
-                        });
-                      }}
-                    >
-                      {/* Fills the box Rnd sizes, so resizing the box resizes the
+                {
+                  placements.filter(p => p.pageIndex === index)
+                    .map(p => (
+                      // Controlled, not uncontrolled: Rnd is told where to be on
+                      // every render instead of remembering it internally. That
+                      // costs a round trip through state on each gesture, and buys
+                      // the guarantee that `placements` is never out of date —
+                      // which is the whole point, because Milestone 4 exports
+                      // these numbers and cannot reach inside Rnd to get them.
+                      <Rnd
+                        key={p.id}
+                        position={{ x: p.x, y: p.y }}
+                        size={{ width: p.width, height: p.height }}
+                        // Resolves to PdfPage's wrapper — the same element whose
+                        // `relative` makes x/y page-relative in the first place.
+                        bounds="parent"
+                        // The ratio came from the image's natural size, so locking
+                        // it is what keeps the signature from being squashed.
+                        lockAspectRatio
+                        // A mousedown anywhere inside this box normally starts a
+                        // drag, and the delete button is inside it. This selector
+                        // exempts the button, which would otherwise be almost
+                        // impossible to click without dragging the signature away.
+                        cancel='.no-drag'
+                        // Two pixels of border are always there and only the
+                        // colour changes, so the image never shifts when the
+                        // highlight appears. A border sits inside the box, which
+                        // an outline or a ring would not — those get clipped by
+                        // the page wrapper's overflow-hidden at the very edge.
+                        className={`group border-2 ${activeId === p.id ? 'border-blue-500' : 'border-transparent'}`}
+                        // The start handlers light the highlight and the stop
+                        // handlers put it out, so the two gestures share one
+                        // piece of state rather than each growing their own.
+                        onDragStart={() => setActiveId(p.id)}
+                        // `data` already carries the new top-left corner.
+                        onDragStop={(_e, data) => {
+                          setActiveId(null);
+                          updatePlacement(p.id, { x: data.x, y: data.y });
+                        }}
+                        onResizeStart={() => setActiveId(p.id)}
+                        // Position is patched alongside size because a top or left
+                        // handle pins the opposite corner and moves the origin.
+                        // Size is read off the element rather than from `_delta`,
+                        // which is only the change; parseFloat turns Rnd's
+                        // "213.5px" into a number without rounding it.
+                        onResizeStop={(_e, _dir, ref, _delta, position) => {
+                          setActiveId(null);
+                          updatePlacement(p.id, {
+                            width: parseFloat(ref.style.width),
+                            height: parseFloat(ref.style.height),
+                            x: position.x,
+                            y: position.y
+                          });
+                        }}
+                      >
+                        {/* Fills the box Rnd sizes, so resizing the box resizes the
                         image. A placement only exists after a signature was
                         confirmed, so `src` never really falls back. */}
-                      <img
-                        src={signature ?? undefined}
-                        alt=''
-                        // `select-none` keeps a drag from turning into a text
-                        // selection, which would compete for the same gesture.
-                        className='h-full w-full select-none'
-                        // An <img> is a native drag source by default, and a
-                        // native drag replaces mousemove/mouseup with its own
-                        // event set. react-draggable would then never see the
-                        // mouseup it is waiting for, stay stuck in "dragging",
-                        // and keep moving the signature after the button is
-                        // released. Opting out of native dragging is the fix.
-                        draggable={false}
-                      />
-                      {/* Corner-inset rather than hanging outside the box, so
+                        <img
+                          src={signature ?? undefined}
+                          alt=''
+                          // `select-none` keeps a drag from turning into a text
+                          // selection, which would compete for the same gesture.
+                          className='h-full w-full select-none'
+                          // An <img> is a native drag source by default, and a
+                          // native drag replaces mousemove/mouseup with its own
+                          // event set. react-draggable would then never see the
+                          // mouseup it is waiting for, stay stuck in "dragging",
+                          // and keep moving the signature after the button is
+                          // released. Opting out of native dragging is the fix.
+                          draggable={false}
+                        />
+                        {/* Corner-inset rather than hanging outside the box, so
                           the page wrapper's overflow-hidden cannot clip it when
                           the signature sits flush against the page edge. It does
                           cover the top-right resize handle — with the aspect
@@ -577,22 +575,56 @@ function App() {
                           would otherwise land on a button they cannot see —
                           and it is focus-visible rather than focus so a mouse
                           click does not leave the button stuck on. */}
-                      <button
-                        type='button'
-                        className='no-drag absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white opacity-0 transition-opacity 
+                        <button
+                          type='button'
+                          className='no-drag absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white opacity-0 transition-opacity 
                         group-hover:opacity-100 focus-visible:opacity-100'
-                        // The label is a bare glyph, so the accessible name has
-                        // to be spelled out for screen readers.
-                        aria-label='Remove signature'
-                        onClick={() => removePlacement(p.id)}
-                      >
-                        ×
-                      </button>
-                    </Rnd>
-                  ))
-              }
-            </PdfPage>
-          ))
+                          // The label is a bare glyph, so the accessible name has
+                          // to be spelled out for screen readers.
+                          aria-label='Remove signature'
+                          onClick={() => removePlacement(p.id)}
+                        >
+                          ×
+                        </button>
+                      </Rnd>
+                    ))
+                }
+              </PdfPage>
+            ))
+          ) : (
+            /*
+             * Both halves of "nothing is open yet": the empty state that keeps
+             * the page from being a blank grey rectangle, and the only place a
+             * first-time visitor is told what the four header buttons do.
+             *
+             * Written as plain text with no second "Open PDF" control, on
+             * purpose. The header's file picker is a <label> wrapped around an
+             * <input>, so a copy of it here would be a second input with its
+             * own wiring — worth extracting into a component one day, but not
+             * worth duplicating. And a button-shaped thing that does nothing
+             * when clicked is worse than a sentence that never pretended.
+             */
+            <section className='mt-24 w-full max-w-md rounded-lg border border-neutral-200 bg-white p-6'>
+              <h2 className='text-base font-semibold'>Sign a PDF without uploading it</h2>
+              <p className='mt-2 text-sm text-neutral-600'>
+                Everything happens in this tab. Your document never leaves your machine.
+              </p>
+              <ol className='mt-4 list-decimal space-y-1 pl-5 text-sm text-neutral-600 marker:text-neutral-400'>
+                <li>
+                  <span className='font-medium text-neutral-900'>Open PDF</span> — pick a file to work on.
+                </li>
+                <li>
+                  <span className='font-medium text-neutral-900'>Sign</span> — draw your signature and confirm it.
+                </li>
+                <li>
+                  <span className='font-medium text-neutral-900'>Place on this page</span> — drop another copy on the page you are looking at, then drag or resize it.
+                </li>
+                <li>
+                  <span className='font-medium text-neutral-900'>Export</span> — download the signed PDF.
+                </li>
+              </ol>
+            </section>
+          )
         }
       </div>
       {
