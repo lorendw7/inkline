@@ -136,7 +136,17 @@ interface Placement {
   be absolute URLs because crawlers have no page to resolve them against.
 - Loading states (PDF parsing, export)
 - Empty states and error handling (non-PDF file, encrypted PDF — `PDFDocument.load` throws; catch and show a message)
-- Keyboard: `Delete` removes the selected placement; `Esc` closes the pad modal
+- Selection: a placed signature stays selected after the mouse comes up, and a
+  press on the page lets it go. The container hears that press on its way up
+  from whatever was hit, so it has to ask `closest()` whether the press landed
+  inside a signature — clearing unconditionally would cancel each selection in
+  the same click that made it.
+- Keyboard (`Delete`, `Esc`): dropped, not deferred. Both commands are already
+  one click away on an object the pointer is on top of, and a global `keydown`
+  listener brings its own problems — a handler created in one render keeps
+  reading that render's state unless the dependency array says otherwise, and
+  two listeners on `window` both fire, so the modal and the page would answer
+  the same `Esc`. Not worth it for this app; worth knowing why.
 - Mobile: signature_pad works with touch out of the box; check react-rnd touch behavior
 - Responsive UI adaptation for mobile devices and different screen sizes
 - Deploy: `npm run build` → Vercel or GitHub Pages (set Vite `base` if using Pages under a subpath)

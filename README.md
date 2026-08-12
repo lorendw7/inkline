@@ -12,7 +12,7 @@ A browser-based PDF signing tool. Open a PDF, draw your signature, drag and resi
 
 - **Open a PDF** and preview every page in the browser
 - **Draw a signature** on a canvas pad — saved as a transparent PNG
-- **Place it anywhere**, on any page, as many times as you like — drag to move, resize to scale, delete with the × button
+- **Place it anywhere**, on any page, as many times as you like — click to select, drag to move, resize to scale, delete with the × button
 - **Export** a new PDF with the signature drawn into the page, downloaded as `<name>-signed.pdf`
 - **100% client-side** — your document never leaves your machine
 
@@ -20,7 +20,7 @@ A browser-based PDF signing tool. Open a PDF, draw your signature, drag and resi
 
 1. **Open PDF** — pick a file. Nothing is uploaded anywhere; the file is read straight into the page.
 2. **Sign** — draw your signature in the modal and confirm. The first copy lands on the page you are looking at.
-3. **Place on this page** — drops another copy of the same signature on the current page. Drag it, grab a corner to resize it, or hover it and hit × to remove it.
+3. **Place on this page** — drops another copy of the same signature on the current page. Click a copy to select it: a blue border and its × appear and stay. Drag it, grab a corner to resize it, hit × to remove it, or click the page itself to let go of it.
 4. **Export** — downloads the signed PDF. The document's own text stays text: the signature is added as an image, the page is never flattened to a picture.
 
 Known limits: pages with a `/Rotate` value other than 0 are not repositioned
@@ -80,9 +80,12 @@ domain root, which under Pages belongs to the account, not to this repository.
 - [ ] **Milestone 5 — Polish** (in progress): site identity — icon, page title
       and link-preview metadata — is done, so is failing to open a file without
       failing silently, the empty screen before a file is picked now introduces
-      the four steps instead of sitting blank, and an export that cannot finish
-      says why rather than leaving a dead button; still to come are keyboard
-      shortcuts (`Delete`, `Esc`) and a layout that survives a phone screen
+      the four steps instead of sitting blank, an export that cannot finish says
+      why rather than leaving a dead button, and a placed signature can be
+      selected and let go of; still to come is a layout that survives a phone
+      screen. Keyboard shortcuts were dropped rather than deferred — every
+      command they would have carried is one click away on an object the user
+      already has under the pointer
 
 Deployment came early, out of milestone order — the site has been live on GitHub
 Pages since Milestone 1, so every step since has been verified in production

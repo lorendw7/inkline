@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ChangeEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { describeLoadError, loadPdf } from './lib/pdf'
 import { PdfPage } from './components/PdfPage'
@@ -9,6 +8,8 @@ import { loadImageSize } from './lib/image'
 import { Rnd } from 'react-rnd'
 import { useVisiblePage } from './hooks/useVisiblePage'
 import { describeExportError, exportSignedPdf } from './lib/export'
+import type { ChangeEvent, MouseEvent as ReactMouseEvent } from 'react'
+
 
 
 
@@ -78,8 +79,9 @@ function App() {
   //
   // Now it survives the gesture, and the two things it drives — the border and
   // the delete button — are what tell the reader which placement a command
-  // would act on. It is cleared by picking another, by deleting this one, and
-  // by opening a different document.
+  // would act on. It is cleared by pressing on the page rather than on a
+  // signature, by picking another, by deleting this one, and by opening a
+  // different document.
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // A finished sentence to show the reader, or null for "nothing is wrong".
@@ -325,11 +327,52 @@ function App() {
    *
    * Clearing selectedId matters more than it used to. It no longer goes null
    * on its own at the end of a gesture, so a deleted placement's id would sit
-   * in there indefinitely — naming nothing, highlighting nothing, and waiting
-   * for the Delete key to read it.
+   * in there indefinitely, naming nothing and highlighting nothing.
    */
   function removePlacement(id: string) {
     setPlacements(prev => prev.filter(p => p.id !== id));
+    setSelectedId(null);
+  }
+
+  /**
+   * Let go of the selection when the press lands on the page instead of on a
+   * signature.
+   *
+   * Selecting has three ways out already — pick another, delete this one, open
+   * a different file — but all three are something else the user wanted, done
+   * on the way. This is the only one that means "I am finished with it", and
+   * without it a blue border and a delete button stay on screen for good.
+   *
+   * The handler sits on the container and therefore hears the press that
+   * selected a signature a moment earlier, on its way up: mousedown fires at
+   * the element it hit and then again at every ancestor. Clearing
+   * unconditionally would undo every selection in the same click that made it.
+   *
+   * So it asks the only question that actually matters — did this press land
+   * inside a signature? — and closest() answers it by walking up from the
+   * element that was hit. Which makes the ordering irrelevant: the answer is
+   * about the shape of the DOM, not about who ran first. The alternative,
+   * stopping propagation inside <Rnd>, would have bought the same behaviour at
+   * the price of depending on how react-rnd forwards its events.
+   *
+   * `signature-overlay` styles nothing. It is a handle for this query, in the
+   * same spirit as `no-drag` two dozen lines below — a class is simply where
+   * the DOM lets you write down a fact about an element.
+   *
+   * mousedown and not click, because selecting happens on mousedown too, and
+   * the two halves of one idea should not land half a gesture apart. A click
+   * also requires press and release on the same element, so pressing on blank
+   * space and drifting a few pixels would silently fail to deselect.
+   *
+   * `instanceof` rather than a cast: EventTarget has no closest(), and an
+   * assertion would only hide that from the compiler, not from the browser.
+   * `Element` rather than `HTMLElement` because that is where closest() is
+   * defined, and SVG elements are Elements too.
+   */
+  function handleBackgroundMouseDown(event: ReactMouseEvent<HTMLDivElement>) {
+    if (event.target instanceof Element && event.target.closest('.signature-overlay')) {
+      return;
+    }
     setSelectedId(null);
   }
 
@@ -531,8 +574,13 @@ function App() {
         </div>)
       }
       {/* The element useVisiblePage searches. It only needs an ancestor of the
-          pages, and this one already exists — no wrapper was added for it. */}
-      <div ref={pagesRef} className='flex flex-col items-center gap-6 p-8'>
+          pages, and this one already exists — no wrapper was added for it.
+
+          It now earns a second job for the same reason: being an ancestor of
+          every page and every overlay is exactly what a press has to bubble
+          through, so this is where "was that press on a signature or on the
+          page?" can be asked once for all of them. */}
+      <div ref={pagesRef} onMouseDown={handleBackgroundMouseDown} className='flex flex-col items-center gap-6 p-8'>
         {
           pdfDoc ? (
             Array.from({ length: pdfDoc.numPages }, (_, index) => (
@@ -568,7 +616,7 @@ function App() {
                         // highlight appears. A border sits inside the box, which
                         // an outline or a ring would not — those get clipped by
                         // the page wrapper's overflow-hidden at the very edge.
-                        className={`group border-2 ${selectedId === p.id ? 'border-blue-500' : 'border-transparent'}`}
+                        className={`signature-overlay group border-2 ${selectedId === p.id ? 'border-blue-500' : 'border-transparent'}`}
                         // Selection, not a gesture flag: the stop handlers
                         // below deliberately do not clear it. react-draggable
                         // fires onStart on mousedown, before any movement, so
