@@ -68,10 +68,19 @@ function App() {
   // export code in Milestone 4 reads the same numbers.
   const [placements, setPlacements] = useState<Placement[]>([]);
 
-  // The placement the user currently has hold of, or null. Only drives the
-  // highlight for now, but it is also the "selected" notion the delete button
-  // and the Delete key will need.
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // The placement the user has picked out, or null for none.
+  //
+  // It used to be set on drag start and cleared on drag stop, which made it a
+  // record of "what is the hand on right now" — true for the length of a
+  // gesture and null the rest of the time. That is a different thing from a
+  // selection, and the name `activeId` was vague enough to hide the difference:
+  // a key pressed after the mouse comes up would have found nothing there.
+  //
+  // Now it survives the gesture, and the two things it drives — the border and
+  // the delete button — are what tell the reader which placement a command
+  // would act on. It is cleared by picking another, by deleting this one, and
+  // by opening a different document.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // A finished sentence to show the reader, or null for "nothing is wrong".
   // Deliberately a string and not the error object: what went wrong is decided
@@ -202,12 +211,12 @@ function App() {
       originalBytesRef.current = bytes;
 
       // A new document invalidates everything tied to the old one: a placement
-      // names a page index that may not exist here, and activeId names a
+      // names a page index that may not exist here, and selectedId names a
       // placement that is about to be dropped. React batches every setState in
       // this function into a single re-render — even after an await — so there is
       // no frame where the new pages are on screen under stale overlays.
       setPlacements([]);
-      setActiveId(null);
+      setSelectedId(null);
 
       // Storing the document re-renders App, which mounts one PdfPage per page.
       setPdfDoc(doc);
@@ -314,14 +323,14 @@ function App() {
    * Drop one placement. Filter rather than map: this removes an item instead
    * of rewriting one, and again it returns a new array so React sees a change.
    *
-   * Clearing activeId matters because it may still name the placement that just
-   * went away. Nothing breaks if it does — no id would match — but leaving a
-   * reference to something deleted is the kind of thing that bites once the
-   * Delete key starts reading the same state.
+   * Clearing selectedId matters more than it used to. It no longer goes null
+   * on its own at the end of a gesture, so a deleted placement's id would sit
+   * in there indefinitely — naming nothing, highlighting nothing, and waiting
+   * for the Delete key to read it.
    */
   function removePlacement(id: string) {
     setPlacements(prev => prev.filter(p => p.id !== id));
-    setActiveId(null);
+    setSelectedId(null);
   }
 
   /**
@@ -559,24 +568,24 @@ function App() {
                         // highlight appears. A border sits inside the box, which
                         // an outline or a ring would not — those get clipped by
                         // the page wrapper's overflow-hidden at the very edge.
-                        className={`group border-2 ${activeId === p.id ? 'border-blue-500' : 'border-transparent'}`}
-                        // The start handlers light the highlight and the stop
-                        // handlers put it out, so the two gestures share one
-                        // piece of state rather than each growing their own.
-                        onDragStart={() => setActiveId(p.id)}
+                        className={`group border-2 ${selectedId === p.id ? 'border-blue-500' : 'border-transparent'}`}
+                        // Selection, not a gesture flag: the stop handlers
+                        // below deliberately do not clear it. react-draggable
+                        // fires onStart on mousedown, before any movement, so
+                        // a plain click runs through here too — which is how
+                        // click-to-select works without a click handler.
+                        onDragStart={() => setSelectedId(p.id)}
                         // `data` already carries the new top-left corner.
                         onDragStop={(_e, data) => {
-                          setActiveId(null);
                           updatePlacement(p.id, { x: data.x, y: data.y });
                         }}
-                        onResizeStart={() => setActiveId(p.id)}
+                        onResizeStart={() => setSelectedId(p.id)}
                         // Position is patched alongside size because a top or left
                         // handle pins the opposite corner and moves the origin.
                         // Size is read off the element rather than from `_delta`,
                         // which is only the change; parseFloat turns Rnd's
                         // "213.5px" into a number without rounding it.
                         onResizeStop={(_e, _dir, ref, _delta, position) => {
-                          setActiveId(null);
                           updatePlacement(p.id, {
                             width: parseFloat(ref.style.width),
                             height: parseFloat(ref.style.height),
@@ -608,16 +617,30 @@ function App() {
                           cover the top-right resize handle — with the aspect
                           ratio locked, the other three corners do the same job.
                           `no-drag` is the class the cancel selector looks for,
-                          and `group-hover` pairs with `group` on the Rnd box, so
-                          hovering anywhere over the signature fades this in.
-                          `focus-visible` does the same for keyboard users, who
-                          would otherwise land on a button they cannot see —
-                          and it is focus-visible rather than focus so a mouse
-                          click does not leave the button stuck on. */}
+                          and it earns its keep twice over: react-draggable
+                          returns early when mousedown lands on a match, so
+                          clicking this button neither drags the signature nor
+                          selects it. Delete is all that happens.
+
+                          Three ways to reveal it, and only the first is a
+                          ternary. The selected placement keeps its button
+                          showing, because a selection the reader cannot act on
+                          is only decoration; `group-hover` pairs with `group`
+                          on the Rnd box so hovering any signature fades its
+                          own in; `focus-visible` does the same for keyboard
+                          users, who would otherwise land on a button they
+                          cannot see — and it is focus-visible rather than focus
+                          so a mouse click does not leave the button stuck on.
+
+                          The base opacity has to live *inside* the ternary
+                          rather than beside it. Two utilities for one property
+                          at equal specificity are settled by their order in
+                          the generated stylesheet, which is Tailwind's to
+                          decide, not this file's. */}
                         <button
                           type='button'
-                          className='no-drag absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white opacity-0 transition-opacity 
-                        group-hover:opacity-100 focus-visible:opacity-100'
+                          className={`no-drag absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white ${selectedId === p.id ? 'opacity-100' : 'opacity-0'}  transition-opacity 
+                          group-hover:opacity-100 focus-visible:opacity-100`}
                           // The label is a bare glyph, so the accessible name has
                           // to be spelled out for screen readers.
                           aria-label='Remove signature'
