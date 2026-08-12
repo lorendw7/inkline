@@ -23,9 +23,12 @@ import { placementToPdfRect } from './coords';
  * a synthetic <a> — stays with the caller. That split is what makes the whole
  * conversion testable without a browser.
  *
- * `displayWidth` is the CSS width every page was rendered at, and it is the
- * bridge back from screen pixels to points. A parameter rather than an import
- * because the constant belongs to the view, and this module has no view.
+ * Nothing here refers to a screen, and that is newer than it looks. This used
+ * to take a `displayWidth` — the CSS width a page had been drawn at — because
+ * placements were stored in the pixels of that drawing and could not be read
+ * without it. A pure PDF composer having to be told how wide a browser painted
+ * something was always the odd part of this module's signature; measuring
+ * placements in page widths instead is what let the parameter go.
  *
  * Throws if the bytes are not a readable PDF — an encrypted file among them.
  * What the user is told about that is the caller's decision.
@@ -34,7 +37,6 @@ export async function exportSignedPdf(
   originalBytes: ArrayBuffer,
   signatureDataUrl: string,
   placements: Placement[],
-  displayWidth: number,
 ): Promise<Uint8Array> {
     const doc = await PDFDocument.load(originalBytes);
 
@@ -58,14 +60,15 @@ export async function exportSignedPdf(
         // export down with it.
         if (!page) continue;
 
-        // Points, not pixels. Recomputed per page because one document may mix
-        // page sizes, and a single global scale would then be right for exactly
-        // one of them. Same ratio getDisplayScale() computes, asked of pdf-lib
-        // rather than pdf.js — the two agree on every unrotated page.
+        // Points. Asked of every page rather than once, because one document
+        // may mix page sizes and a placement means "a fraction of *this*
+        // page" — the same 0.5 is a different number of points on A4 and on
+        // Letter, which is exactly the property that makes it worth storing
+        // that way.
         const {width, height} = page.getSize();
-        const scale = displayWidth / width;
-        // `height`, not `width`: the axis being flipped is y.
-        const rect = placementToPdfRect(p, height, scale);
+        // Width first. Both arguments are numbers and swapping them compiles
+        // perfectly, so this order is worth reading twice.
+        const rect = placementToPdfRect(p, width, height);
 
         // PdfRect's fields are drawImage's options, so the rectangle goes in
         // whole rather than being spelled out field by field.

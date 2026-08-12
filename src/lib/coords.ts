@@ -25,40 +25,55 @@ export interface PdfRect {
 
 
 /**
- * Convert one overlay rectangle from screen coordinates to PDF coordinates.
+ * Convert one placement into the rectangle pdf-lib should draw.
  *
- * Three units meet here, and confusing them fails silently:
+ * Two units meet here, and confusing them fails silently:
  *
- * - `placement` — CSS pixels, origin at the page's top-left, y growing down.
- * - `pageHeight` — the page's height in points, from pdf-lib's page.getSize().
- * - `scale` — CSS pixels per point, the number getDisplayScale() returns. It
- *   must come from the page's CSS width, never from the canvas bitmap width,
- *   which is multiplied by devicePixelRatio.
+ * - `placement` — lengths in page widths, origin at the page's top-left, y
+ *   growing down. See Placement.
+ * - `pageWidth` / `pageHeight` — the page in points, from page.getSize().
  *
- * Dividing by `scale` undoes the display zoom. The y line then does two things
- * at once: `pageHeight - y/scale` flips the axis so it grows upwards, and
- * subtracting `pdfH` walks from the image's top edge down to its bottom one,
- * because drawImage's `y` names the bottom of the image where CSS `top` names
- * the top.
+ * Multiplying by `pageWidth` is what turns a length in page widths into a
+ * length in points. It is the right multiplier for `pdfH` as well, even though
+ * that is a vertical measurement, because Placement measures both axes against
+ * the width — that is the whole of the unit's definition, and the single most
+ * likely thing to get wrong in this file. `pageHeight` appears exactly once,
+ * and only as the origin of the y flip.
  *
- * Corner check: (0, 0) gives pdfY = pageHeight - pdfH, flush with the top of
- * the page; a placement resting on the bottom edge gives pdfY = 0.
+ * The y line does two things at once: `pageHeight - y * pageWidth` flips the
+ * axis so it grows upwards, and subtracting `pdfH` walks from the image's top
+ * edge down to its bottom one, because drawImage's `y` names the bottom of the
+ * image where CSS `top` names the top.
  *
- * Rotated pages (/Rotate ≠ 0) are not handled — see ARCHITECTURE.md.
+ * There is no `scale` any more, and no division. It used to take one — CSS
+ * pixels per point — because a placement was stored in the pixels of a canvas
+ * fixed at 800 wide, so this function had to know how big that canvas was. A
+ * unit expressed in the page's own terms removes the question: the conversion
+ * is now between two descriptions of the same page rather than between a page
+ * and a screen.
+ *
+ * Corner checks: (0, 0) gives pdfY = pageHeight - pdfH, flush with the top of
+ * the page; a placement resting on the bottom edge gives pdfY = 0; and
+ * width = 1 gives pdfW = pageWidth, one page across, which is the unit's
+ * definition falling out of the arithmetic.
+ *
+ * Rotated pages (/Rotate ≠ 0) are not handled — see ARCHITECTURE.md. Note that
+ * `pageWidth` here is getSize().width, which on a rotated page is not the edge
+ * the reader saw; that mismatch is precisely what Milestone 6 has to resolve.
  */
 export function placementToPdfRect(
     placement: Placement,
+    pageWidth: number,
     pageHeight: number,
-    scale: number
 ): PdfRect {
 
     const {x, y, width, height} = placement;
 
-    const pdfW = width / scale;
-    const pdfH = height / scale;
+    const pdfW = width * pageWidth;
+    const pdfH = height * pageWidth;
 
-    const pdfX = x / scale;
-    const pdfY = pageHeight - y / scale - pdfH;
+    const pdfX = x * pageWidth;
+    const pdfY = pageHeight - y * pageWidth - pdfH;
 
     return {
         x: pdfX,

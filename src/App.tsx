@@ -15,18 +15,31 @@ import type { ChangeEvent, MouseEvent as ReactMouseEvent } from 'react'
 
 
 /**
- * Every page is rendered at this width in CSS pixels, so a single constant
- * fixes the scale for the whole document. Milestone 4 converts overlay
- * coordinates back into PDF points using the same number.
+ * The widest a page is ever drawn, in CSS pixels. A narrow window gets its own
+ * width instead — see the ResizeObserver below.
+ *
+ * A ceiling rather than the width, which is the whole of the mobile fix: a
+ * phone is 390 across and used to be handed 800 regardless, so a page hung off
+ * both edges of the screen. And a ceiling rather than "always fill the
+ * window", because a page stretched across a 2560px monitor is a line of text
+ * too long to read.
+ *
+ * Purely a view decision now. It used to be two things at once — how wide to
+ * draw a page, and the unit placements were stored in — and the second job is
+ * why the export had to be handed this number to do its maths. Placement is in
+ * page widths today, so this constant reaches exactly one place: the pixels
+ * react-rnd is given and reports back, through toPx/toFraction below.
  */
-const DISPLAY_WIDTH = 800;
+const MAX_DISPLAY_WIDTH = 800;
 
 /**
- * Initial on-screen width of a placed signature, in CSS pixels. Only the width
- * is a constant: the height follows from the image's own aspect ratio, so a
- * wide scrawl and a tall one both keep their proportions.
+ * Initial width of a placed signature, as a fraction of the page's width — a
+ * bit under a quarter of it, whatever the page and whatever the screen.
+ *
+ * Only the width is a constant: the height follows from the image's own aspect
+ * ratio, so a wide scrawl and a tall one both keep their proportions.
  */
-const SIGNATURE_WIDTH = 180;
+const SIGNATURE_WIDTH = 0.225;
 
 /**
  * The shared look of the header's secondary buttons.
@@ -114,6 +127,50 @@ function App() {
   // This one holds the scrolling list of pages. One ref for the container is
   // all useVisiblePage needs — it finds the individual pages by attribute.
   const pagesRef = useRef<HTMLDivElement>(null);
+
+  // How wide to draw a page right now, in CSS pixels: whatever the container
+  // has room for, capped at MAX_DISPLAY_WIDTH. Starts at 0, which reads as
+  // "not measured yet" — a real width only exists after the browser has laid
+  // the container out, which is why this cannot be computed during render.
+  //
+  // State and not a ref, unlike the two refs around it: this number *is* on
+  // screen. Every canvas is rendered at it and every overlay is positioned
+  // through it, so a change has to re-render. That is the whole distinction —
+  // a ref for what only other code reads, state for what the picture depends
+  // on.
+  const [pageWidth, setPageWidth] = useState(0);
+
+  // The one subscription that makes the document responsive. It watches the
+  // container rather than the window, so it is right for reasons the window
+  // would only be right by accident: a sidebar, a wider gutter, or the phone
+  // being turned all change this box, and only some of them change the window.
+  //
+  // `contentRect.width` is the *content* box — padding excluded — which is
+  // exactly the space a page may occupy, given the container's own `p-8`. That
+  // it is the wrong measurement for the header effect below and the right one
+  // here is not inconsistency: there the padding is part of the strip being
+  // hidden, here it is not part of the room being offered.
+  //
+  // `?? 0` and not `|| 0` on the same principle as everywhere else in this
+  // file: 0 is a legitimate width, and `||` cannot tell it from missing.
+  //
+  // Empty deps, as always for an effect that establishes a listener — the
+  // listener re-runs, the effect does not. And the observer fires once on
+  // observe(), so the first real width arrives without waiting for a resize
+  // that may never come.
+  useEffect(() => {
+    const container = pagesRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver(entries => {
+      const available = entries[0]?.contentRect.width ?? 0;
+      setPageWidth(Math.min(available, MAX_DISPLAY_WIDTH));
+    });
+
+    observer.observe(container);
+
+    return () => observer.disconnect();
+  }, []);
 
   // How much of the viewport's top edge the sticky header hides. The observer
   // has to discount that strip, or a page still tucked behind the header would
@@ -286,6 +343,11 @@ function App() {
     if (!pdfDoc) return;
     const natural = await loadImageSize(dataUrl);
     const width = SIGNATURE_WIDTH;
+    // Unchanged by the move to page widths, and that is the point: an aspect
+    // ratio is dimensionless, so `width × ratio` holds in whatever unit width
+    // happens to be in. It would not have survived measuring x against the
+    // page's width and y against its height — the ratio would have had to be
+    // corrected by the page's own proportions first.
     const height = width * (natural.height / natural.width);
 
     // Appended rather than replacing the array: the same signature can now go
@@ -304,8 +366,14 @@ function App() {
       return [...prev, {
         id: crypto.randomUUID(),
         pageIndex: pageIndex,
-        x: (DISPLAY_WIDTH - width) / 2,
-        y: 100 + onThisPage * 24,
+        // Centring is (page − signature) ÷ 2, and a page is 1 page wide. The
+        // literal is the unit's definition stated in code: whatever else these
+        // numbers mean, 1 is one full page width.
+        x: (1 - width) / 2,
+        // An eighth of a page down, each further copy another 0.03 lower —
+        // the 100px and 24px this used to say, divided by the 800 they were
+        // measured against.
+        y: 0.125 + onThisPage * 0.03,
         width,
         height,
       }];
@@ -399,6 +467,37 @@ function App() {
   }
 
   /**
+   * The one border crossing between the two units in this app.
+   *
+   * Placement is measured in page widths everywhere — in state, in the export,
+   * in the file if it were ever saved. react-rnd is the single component
+   * that cannot speak that language: it positions and sizes in CSS pixels and
+   * reports gestures back the same way. So values are multiplied on the way in
+   * and divided on the way out, and nowhere else.
+   *
+   * Named rather than written inline as `p.x * pageWidth`, for two reasons. A
+   * multiplication and a division look nearly identical, and using the wrong
+   * one produces no error at all — only a signature in the wrong place; the
+   * names carry the direction so it cannot be applied backwards. And this is
+   * the seam a responsive page width plugged into: `pageWidth` stopped being a
+   * constant and these two lines are all that had to know, rather than six
+   * expressions scattered through the JSX below.
+   *
+   * Declared during render rather than memoised, because both close over
+   * `pageWidth` and would need re-making every time it changed anyway. The
+   * cost is two function objects per render; the alternative is a dependency
+   * array that is wrong the day someone forgets to update it.
+   *
+   * Division by zero is not guarded here. It cannot happen: no <Rnd> is
+   * mounted until `pageWidth > 0`, and toFraction is only ever called from one
+   * of its gesture handlers. The gate is in the JSX below, deliberately — a
+   * guard here would silently return Infinity, where a component that does not
+   * exist yet cannot report anything at all.
+   */
+  const toPx = (fraction: number) => fraction * pageWidth;
+  const toFraction = (px: number) => px / pageWidth;
+
+  /**
    * Compose the signed PDF and hand it to the browser as a download.
    *
    * The export comes in two halves. exportSignedPdf() does the maths and
@@ -418,7 +517,7 @@ function App() {
 
     try {
       // The only await in the function; everything below is synchronous.
-      const signedBytes = await exportSignedPdf(bytes, signature, placements, DISPLAY_WIDTH);
+      const signedBytes = await exportSignedPdf(bytes, signature, placements);
 
       // A Blob is bytes plus a MIME type — the browser's idea of a file. Its
       // first argument is a list of chunks, which is why a single one still comes
@@ -535,7 +634,7 @@ function App() {
               element started with, which for a <span> is inline. */}
           <span className='sm:hidden'>Place</span>
           <span
-          className='hidden sm:inline'
+            className='hidden sm:inline'
           >Place on this page</span>
         </button>
 
@@ -586,9 +685,11 @@ function App() {
           `fixed` and not `sticky`, for three reasons in increasing order of
           how much they would hurt. It must not occupy layout space, or the
           pages jump down under the reader's hands the moment it appears. It
-          must not be able to change the header's height, because the effect
-          that measures that height runs once, on the promise that it never
-          will. And it must not add a strip of viewport that IntersectionObserver
+          must not be able to change the header's height — that used to be
+          load-bearing, back when the height was measured once; the header's
+          own ResizeObserver has since made it merely undesirable, since a
+          banner that pushed the header taller would now shove every page down
+          with it. And it must not add a strip of viewport that IntersectionObserver
           does not know about, or the page counter starts lying early again —
           the very bug headerHeight exists to prevent, one layer down.
 
@@ -633,26 +734,36 @@ function App() {
           through, so this is where "was that press on a signature or on the
           page?" can be asked once for all of them.
 
-          `items-center-safe` is the only place in this file that needs the
-          safe keyword, and it is here because this is the only place where the
-          content is genuinely wider than its box: a page is rendered at a fixed
-          800px and a phone is 390 across. Plain centering would still centre it
-          — half the overflow to the right, half to the left — and only the
-          right half is reachable, because a scrollable area never extends past
-          its own origin. The left edge of the page would be unreachable rather
-          than merely off-screen. `safe` means "centre unless that overflows,
-          otherwise align to start", so the overflow all lands on one side and
-          scrolling can get to it.
+          It is also the box the ResizeObserver above measures, which is why
+          `p-8` is more than decoration: contentRect subtracts it, so the
+          padding is what keeps a page off the window's edges on a phone.
 
-          It is a safety net and not a fix. The actual answer to 800px on a
-          390px screen is not to be 800px, which is a change to DISPLAY_WIDTH
-          and to the export maths that reads it. This class stays correct
-          either way: once nothing overflows, `safe` never fires. */}
+          `items-center-safe` was the answer to a page being wider than this
+          box — a fixed 800px page on a 390px phone. Plain centering would
+          still centre it, half the overflow to the right and half to the left,
+          and only the right half is reachable, because a scrollable area never
+          extends past its own origin; the left edge of the page would be
+          unreachable rather than merely off-screen. `safe` means "centre
+          unless that overflows, otherwise align to start", so the overflow all
+          lands on one side and scrolling can get to it.
+
+          The real fix arrived afterwards and is one line up: a page is now
+          drawn at the width this box actually has, so nothing overflows and
+          this class never fires. Kept anyway, because it costs nothing when
+          idle and the invariant it protects is not written down anywhere —
+          the day a minimum width, a zoom control, or a wide landscape page
+          reintroduces the overflow, the failure it prevents is silent. */}
       <div ref={pagesRef} onMouseDown={handleBackgroundMouseDown} className='flex flex-col items-center-safe gap-6 p-8'>
         {
-          pdfDoc ? (
+          // `pageWidth > 0` is not a second empty-state check, it is a
+          // "wait one frame" check. On the very first render the container has
+          // not been laid out, so the observer has not reported anything and a
+          // page drawn now would be drawn at zero — a wasted pdf.js render and
+          // a division by zero waiting in toFraction. The condition falls false
+          // for a single frame at most, before any document can be open.
+          pdfDoc && pageWidth > 0 ? (
             Array.from({ length: pdfDoc.numPages }, (_, index) => (
-              <PdfPage key={index} pageNumber={index + 1} pdfDoc={pdfDoc} displayWidth={DISPLAY_WIDTH}>
+              <PdfPage key={index} pageNumber={index + 1} pdfDoc={pdfDoc} displayWidth={pageWidth}>
                 {/* Each page draws only the placements that belong to it. The
                   filter is what turns one flat array into per-page overlays. */}
                 {
@@ -666,8 +777,8 @@ function App() {
                       // these numbers and cannot reach inside Rnd to get them.
                       <Rnd
                         key={p.id}
-                        position={{ x: p.x, y: p.y }}
-                        size={{ width: p.width, height: p.height }}
+                        position={{ x: toPx(p.x), y: toPx(p.y) }}
+                        size={{ width: toPx(p.width), height: toPx(p.height) }}
                         // Resolves to PdfPage's wrapper — the same element whose
                         // `relative` makes x/y page-relative in the first place.
                         bounds="parent"
@@ -693,7 +804,7 @@ function App() {
                         onDragStart={() => setSelectedId(p.id)}
                         // `data` already carries the new top-left corner.
                         onDragStop={(_e, data) => {
-                          updatePlacement(p.id, { x: data.x, y: data.y });
+                          updatePlacement(p.id, { x: toFraction(data.x), y: toFraction(data.y) });
                         }}
                         onResizeStart={() => setSelectedId(p.id)}
                         // Position is patched alongside size because a top or left
@@ -703,10 +814,10 @@ function App() {
                         // "213.5px" into a number without rounding it.
                         onResizeStop={(_e, _dir, ref, _delta, position) => {
                           updatePlacement(p.id, {
-                            width: parseFloat(ref.style.width),
-                            height: parseFloat(ref.style.height),
-                            x: position.x,
-                            y: position.y
+                            width: toFraction(parseFloat(ref.style.width)),
+                            height: toFraction(parseFloat(ref.style.height)),
+                            x: toFraction(position.x),
+                            y: toFraction(position.y)
                           });
                         }}
                       >
