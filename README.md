@@ -14,6 +14,7 @@ A browser-based PDF signing tool. Open a PDF, draw your signature, drag and resi
 - **Draw a signature** on a canvas pad — saved as a transparent PNG
 - **Place it anywhere**, on any page, as many times as you like — click to select, drag to move, resize to scale, delete with the × button
 - **Export** a new PDF with the signature drawn into the page, downloaded as `<name>-signed.pdf`
+- **Works on a phone** — pages are drawn at whatever width the screen has, and a placement is stored in units that survive a resize or a rotation
 - **100% client-side** — your document never leaves your machine
 
 ## How to use
@@ -77,17 +78,19 @@ domain root, which under Pages belongs to the account, not to this repository.
 - [x] **Milestone 2 — Signature pad**: draw a transparent-PNG signature in a modal
 - [x] **Milestone 3 — Placement**: drag, resize and delete signature overlays with react-rnd, on any page and any number of times
 - [x] **Milestone 4 — Export**: compose and download the signed PDF with pdf-lib (unrotated pages only — see [Architecture Notes](docs/ARCHITECTURE.md))
-- [ ] **Milestone 5 — Polish** (in progress): site identity — icon, page title
-      and link-preview metadata — is done, so is failing to open a file without
-      failing silently, the empty screen before a file is picked now introduces
-      the four steps instead of sitting blank, an export that cannot finish says
-      why rather than leaving a dead button, and a placed signature can be
-      selected and let go of, and the header now wraps onto a second row rather
-      than overflowing a phone; still to come is the page itself, which is
-      rendered at a fixed 800px and is the one number the export maths is
-      written against. Keyboard shortcuts were dropped rather than deferred —
-      every command they would have carried is one click away on an object the
-      user already has under the pointer
+- [x] **Milestone 5 — Polish**: site identity (icon, page title, link-preview
+      metadata); every failure now says something — a file that will not open, an
+      export that cannot finish — instead of leaving a dead button; the empty
+      screen introduces the four steps rather than sitting blank; a placed
+      signature stays selected until you let it go; and the whole thing fits a
+      phone, header and page both. Keyboard shortcuts were dropped rather than
+      deferred — every command they would have carried is one click away on an
+      object the user already has under the pointer
+
+The MVP is complete: the five milestones above cover open → sign → place →
+export, and the app is live and usable. What is left is in the Roadmap below —
+additions, not unfinished business — with one real gap among them: rotated pages
+are detected and warned about, not repositioned.
 
 Deployment came early, out of milestone order — the site has been live on GitHub
 Pages since Milestone 1, so every step since has been verified in production
@@ -111,7 +114,7 @@ src/
   lib/
     pdf.ts                   # pdf.js: load, display scale, render a page, name a failure
     export.ts                # pdf-lib: embed the signature, save new bytes, name a failure
-    coords.ts                # CSS pixels (top-left) <-> PDF points (bottom-left)
+    coords.ts                # page widths (top-left) -> PDF points (bottom-left)
     image.ts                 # Natural size of a data URL, for the aspect ratio
     types.ts                 # Placement — the shape both the overlay and the export read
 ```

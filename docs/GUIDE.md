@@ -42,8 +42,8 @@ npm install -D tailwindcss @tailwindcss/vite
   ```
 - Keep **two copies** of the file bytes conceptually: the original `ArrayBuffer` (for pdf-lib later) and the rendered canvases (for display only). pdf.js may transfer/detach the buffer you pass it — pass it a copy (`bytes.slice(0)`).
 - Render each page in its own `<canvas>` inside a React component; use a `ref` + `useEffect`. Guard against double-render in React StrictMode (cancel the render task in the effect cleanup).
-- Pick a display scale so the page fits your layout (e.g. fixed CSS width, compute `scale = displayWidth / viewport.width` at scale 1). **Record the scale per page** — you'll need it for coordinate math in Milestone 4.
-- For sharp text on high-DPI screens, size the canvas *bitmap* at `scale * devicePixelRatio` and set `canvas.style.width/height` back down to the CSS size. Keep that multiplication inside the render helper: the scale you record for coordinates must stay CSS-based (see [ARCHITECTURE.md](ARCHITECTURE.md) → Gotchas).
+- Pick a display width so the page fits your layout, and derive the scale from it: `scale = displayWidth / viewport.width` at scale 1. Start with a fixed width if you like — but treat it as a *view* decision only, and see Milestone 3 before you let that number into your placement data. (Inkline ended up with `min(container width, 800)`, watched by a `ResizeObserver`.)
+- For sharp text on high-DPI screens, size the canvas *bitmap* at `scale * devicePixelRatio` and set `canvas.style.width/height` back down to the CSS size. Keep that multiplication inside the render helper — nothing outside it should ever see a device pixel (see [ARCHITECTURE.md](ARCHITECTURE.md) → Gotchas).
 
 **Checkpoint:** A multi-page PDF displays crisply; scrolling works; no console errors.
 
@@ -77,17 +77,27 @@ npm install -D tailwindcss @tailwindcss/vite
 interface Placement {
   id: string;
   pageIndex: number;
-  x: number;      // CSS px, relative to that page's canvas top-left
+  x: number;      // in page widths, from that page's top-left, y growing down
   y: number;
-  width: number;  // CSS px
+  width: number;  // in page widths
   height: number;
 }
 ```
 
+**Choose the unit before you write the handlers.** CSS pixels are the obvious
+choice — react-rnd reports them and no conversion is needed — but they are only
+meaningful next to the width the page happened to be drawn at, and that number
+moves the day the app has to fit a phone. Measuring everything against the
+page's own width instead costs one multiply on the way into `<Rnd>` and one
+divide on the way out, and buys placements that survive a resize, a rotation,
+and any future zoom. Both axes against the *width*, not each against its own
+dimension: that is what keeps a square signature stored as `width === height`.
+
 **Hints:**
 - Make each page's wrapper `position: relative`; render `<Rnd>` absolutely inside it so `x/y` are page-relative automatically.
 - `<Rnd>` props you'll want: `bounds="parent"`, `lockAspectRatio`, `onDragStop`, `onResizeStop` — update your `Placement` state in the stop handlers.
-- Default initial size: signature's natural aspect ratio at ~180 px wide, centered-ish.
+- Keep the two conversions in one named pair (`toPx` / `toFraction`). A multiply and a divide look alike and applying the wrong one throws no error — only a signature in the wrong place.
+- Default initial size: the signature's natural aspect ratio at a bit under a quarter of a page wide. An aspect ratio is dimensionless, so `height = width × ratio` holds whatever unit you picked.
 - Allow deleting a placement (small × button on hover).
 
 **Checkpoint:** The signature image can be dragged/resized on any page and its state survives re-renders.
@@ -106,20 +116,23 @@ interface Placement {
 
 **The one hard part — coordinates.** Read [ARCHITECTURE.md](ARCHITECTURE.md) first. In short:
 
-- Your overlay coordinates are **CSS pixels, origin top-left, y grows down**.
+- Your placement coordinates are **page widths, origin top-left, y grows down**.
 - PDF coordinates are **points, origin bottom-left, y grows up**.
-- Conversion (no rotation case):
+- Conversion (no rotation case), for a page `W` × `H` points:
   ```
-  scale   = renderedCssWidth / pageWidthInPoints
-  pdfX    = x / scale
-  pdfW    = width / scale
-  pdfH    = height / scale
-  pdfY    = pageHeightInPoints - (y / scale) - pdfH
+  pdfX    = x × W
+  pdfW    = width × W
+  pdfH    = height × W          // W, not H — both axes measure against the width
+  pdfY    = H - (y × W) - pdfH
   ```
   Note `drawImage`'s `y` is the image's **bottom** edge.
 
+  `W` three times and `H` once. Nothing in this function refers to a screen —
+  if you find yourself passing it a display width, the unit in Milestone 3 went
+  wrong.
+
 **Hints:**
-- Get `pageWidthInPoints/HeightInPoints` from pdf-lib's `page.getSize()` (or pdf.js viewport at scale 1 — they agree for unrotated pages).
+- Get `W`/`H` from pdf-lib's `page.getSize()` (or pdf.js viewport at scale 1 — they agree for unrotated pages). Ask **per page**: one document may mix page sizes, and the same `0.5` is a different number of points on A4 and on Letter.
 - Convert the signature data URL to bytes with `fetch(dataUrl).then(r => r.arrayBuffer())`.
 - Test with a placement in each corner of the page to prove the math.
 - Rotated pages (`page.getRotation()` ≠ 0) need extra transform work — fine to punt for MVP, but detect and warn.
@@ -148,7 +161,15 @@ interface Placement {
   two listeners on `window` both fire, so the modal and the page would answer
   the same `Esc`. Not worth it for this app; worth knowing why.
 - Mobile: signature_pad works with touch out of the box; check react-rnd touch behavior
-- Responsive UI adaptation for mobile devices and different screen sizes
+- Responsive layout, in two parts that fail differently. The **header** is a flex
+  row, and a flex container would rather squash its children than wrap, so four
+  buttons fight over 390px until you add `flex-wrap` — after which its height is
+  no longer a constant, and anything that measured it once has to become a
+  `ResizeObserver`. The **page** is the harder half: a fixed-width canvas simply
+  overflows, and centered overflow is unreachable on the left, because a
+  scrollable area never extends past its own origin. Draw the page at
+  `min(container width, max)` instead — which only works if a placement is not
+  stored in pixels of that width (Milestone 3).
 - Deploy: `npm run build` → Vercel or GitHub Pages (set Vite `base` if using Pages under a subpath)
   
 ---
