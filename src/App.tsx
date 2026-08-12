@@ -472,22 +472,43 @@ function App() {
           )
         }
       </header>
-      {/* Outside the header on purpose. The header is sticky, and the effect
-          that measures it runs once on the assumption that it can never change
-          height — a banner appearing inside it would break that quietly, and
-          the visible-page offset with it. Out here it scrolls away with the
-          page, which is a fair trade for a message the reader is looking
-          straight at.
+      {/* Pinned to the viewport rather than sitting in the page, because the
+          reader is not always at the top of it. That used to be a safe
+          assumption: the only failure was a file that would not open, and
+          nobody has scrolled anywhere when there is no document. Export broke
+          it — it happens on page five, after the signature is in place, and a
+          banner two thousand pixels above the fold reports nothing to anyone.
+
+          `fixed` and not `sticky`, for three reasons in increasing order of
+          how much they would hurt. It must not occupy layout space, or the
+          pages jump down under the reader's hands the moment it appears. It
+          must not be able to change the header's height, because the effect
+          that measures that height runs once, on the promise that it never
+          will. And it must not add a strip of viewport that IntersectionObserver
+          does not know about, or the page counter starts lying early again —
+          the very bug headerHeight exists to prevent, one layer down.
+
+          `top` is an inline style because Tailwind never runs this code: it
+          scans the source for literal class names, so a value only known at
+          runtime cannot be a class at all. The gap below the header stays a
+          class (`mt-4`) precisely because it is the opposite kind of number —
+          a design constant, not a measurement, and it should not be buried
+          inside an expression that looks like coordinate maths.
 
           `role="alert"` makes this an assertive live region: a screen reader
           announces it the moment the node appears, which is why the whole
           element is conditional rather than always present and sometimes
-          empty — a live region that was already there may never be read. */}
+          empty — a live region that was already there may never be read.
+
+          Nothing dismisses itself. A toast that fades is fine for success and
+          hostile for failure: look down at the keyboard for three seconds and
+          the only account of what went wrong is gone. */}
       {
         error && (<div role='alert'
-          className='flex items-center gap-3 
-          mx-8 mt-4 px-4 py-3 rounded-md border border-red-200 bg-red-50 text-red-800 
-          text-sm'>
+          style={{ top: headerHeight }}
+          className='fixed left-1/2 z-20 -translate-x-1/2 w-[min(90vw,36rem)] flex items-center gap-3 
+          mt-4 px-4 py-3 rounded-md border border-red-200 bg-red-50 text-red-800 
+          text-sm shadow-lg'>
           <span>
             {error}
           </span>
