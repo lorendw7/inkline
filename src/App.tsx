@@ -610,7 +610,7 @@ function App() {
       {
         error && (<div role='alert'
           style={{ top: headerHeight }}
-          className='fixed left-1/2 z-20 -translate-x-1/2 w-[min(90vw,36rem)] flex items-center gap-3 
+          className='fixed left-1/2 z-20 -translate-x-1/2 w-[min(90vw,36rem)] flex items-center gap-3
           mt-4 px-4 py-3 rounded-md border border-red-200 bg-red-50 text-red-800 
           text-sm shadow-lg'>
           <span>
@@ -631,8 +631,24 @@ function App() {
           It now earns a second job for the same reason: being an ancestor of
           every page and every overlay is exactly what a press has to bubble
           through, so this is where "was that press on a signature or on the
-          page?" can be asked once for all of them. */}
-      <div ref={pagesRef} onMouseDown={handleBackgroundMouseDown} className='flex flex-col items-center gap-6 p-8'>
+          page?" can be asked once for all of them.
+
+          `items-center-safe` is the only place in this file that needs the
+          safe keyword, and it is here because this is the only place where the
+          content is genuinely wider than its box: a page is rendered at a fixed
+          800px and a phone is 390 across. Plain centering would still centre it
+          — half the overflow to the right, half to the left — and only the
+          right half is reachable, because a scrollable area never extends past
+          its own origin. The left edge of the page would be unreachable rather
+          than merely off-screen. `safe` means "centre unless that overflows,
+          otherwise align to start", so the overflow all lands on one side and
+          scrolling can get to it.
+
+          It is a safety net and not a fix. The actual answer to 800px on a
+          390px screen is not to be 800px, which is a change to DISPLAY_WIDTH
+          and to the export maths that reads it. This class stays correct
+          either way: once nothing overflows, `safe` never fires. */}
+      <div ref={pagesRef} onMouseDown={handleBackgroundMouseDown} className='flex flex-col items-center-safe gap-6 p-8'>
         {
           pdfDoc ? (
             Array.from({ length: pdfDoc.numPages }, (_, index) => (
@@ -739,7 +755,7 @@ function App() {
                           decide, not this file's. */}
                         <button
                           type='button'
-                          className={`no-drag absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white ${selectedId === p.id ? 'opacity-100' : 'opacity-0'}  transition-opacity 
+                          className={`no-drag absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white ${selectedId === p.id ? 'opacity-100' : 'opacity-0'}  transition-opacity
                           group-hover:opacity-100 focus-visible:opacity-100`}
                           // The label is a bare glyph, so the accessible name has
                           // to be spelled out for screen readers.
