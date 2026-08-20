@@ -57,9 +57,12 @@ export interface PdfRect {
  * width = 1 gives pdfW = pageWidth, one page across, which is the unit's
  * definition falling out of the arithmetic.
  *
- * Rotated pages (/Rotate ≠ 0) are not handled — see ARCHITECTURE.md. Note that
- * `pageWidth` here is getSize().width, which on a rotated page is not the edge
- * the reader saw; that mismatch is precisely what Milestone 6 has to resolve.
+ * Rotated pages (/Rotate ≠ 0) are not handled, and deliberately never will be —
+ * see ARCHITECTURE.md and GUIDE.md, Milestone 6d. Note that `pageWidth` here is
+ * getSize().width, which on a rotated page is not the edge the reader saw. That
+ * mismatch is the whole of what handling them would mean, and declining it is
+ * what keeps this function four lines of one width and one height rather than a
+ * switch over four cases with a `rotate:` to pass along.
  */
 export function placementToPdfRect(
     placement: Placement,

@@ -22,12 +22,13 @@
  *
  * *Displayed* width, precisely: the horizontal edge the reader sees, with
  * /Rotate applied. For an unrotated page that is page.getSize().width; on a
- * page rotated 90 or 270 it is getSize().height instead. Today every page this
- * app will place a signature on is unrotated, so the two coincide and the
- * distinction costs nothing — which is exactly why it is worth pinning down
- * now. Rotation support is a later milestone, and it will need this unit to
- * have meant the displayed edge all along; a definition written when both
- * readings are true is a definition nobody has to re-derive under pressure.
+ * page rotated 90 or 270 it is getSize().height instead. Every page this app
+ * places a signature on is unrotated, so the two coincide and the distinction
+ * costs nothing — which is exactly why it is worth stating rather than leaving
+ * to be inferred. Rotation support was considered and dropped (GUIDE.md,
+ * Milestone 6d), so this paragraph is no longer preparing for the day the two
+ * readings diverge; it records why they do not, and makes the assumption the
+ * export relies on an explicit one instead of an accident nobody wrote down.
  *
  * These are lengths and not percentages, and `y` and `height` regularly exceed
  * 1: an A4 page is 1.414 page-widths tall, so its bottom edge is at y = 1.414.

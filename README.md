@@ -25,8 +25,10 @@ A browser-based PDF signing tool. Open a PDF, draw your signature, drag and resi
 4. **Export** — downloads the signed PDF. The document's own text stays text: the signature is added as an image, the page is never flattened to a picture.
 
 Known limits: pages with a `/Rotate` value other than 0 are not repositioned
-correctly yet, and encrypted PDFs cannot be opened at all — picking one gets you
-a message saying so rather than a password prompt. A document protected against
+correctly, and will not be — support for them was considered and deliberately
+dropped, so rotate and re-save such a page in any PDF viewer before signing it.
+Encrypted PDFs cannot be opened at all: picking one gets you a message saying so
+rather than a password prompt. A document protected against
 *editing* rather than against reading is the awkward middle case: it opens and
 displays like any other, and only the export is refused, because the two
 libraries draw the line in different places (see
@@ -119,11 +121,18 @@ is one of the few things localhost cannot verify: check it against
       phone, header and page both. Keyboard shortcuts were dropped rather than
       deferred — every command they would have carried is one click away on an
       object the user already has under the pointer
+- [ ] **Milestone 6 — A signature library, a date stamp, and a bigger pad**:
+      several signatures at once, each placement naming the one it draws; a date
+      rendered to a PNG so it travels the path a signature already proved; and a
+      desktop-sized drawing surface, which means sizing the pad's bitmap on
+      resize rather than once. Rotated-page support is dropped here rather than
+      deferred — see [the guide](docs/GUIDE.md) for the reasoning
 
-The MVP is complete: the five milestones above cover open → sign → place →
-export, and the app is live and usable. What is left is in the Roadmap below —
-additions, not unfinished business — with one real gap among them: rotated pages
-are detected and warned about, not repositioned.
+The MVP is complete: the first five milestones cover open → sign → place →
+export, and the app is live and usable. What is left is Milestone 6 and the
+Roadmap below — additions, not unfinished business. Rotated pages are the one
+thing this tool will not learn to do; that is now a decision with a reason
+rather than an open gap.
 
 Deployment came early, out of milestone order — the site has been live on GitHub
 Pages since Milestone 1, so every step since has been verified in production
@@ -166,9 +175,9 @@ composes, and `Placement[]` is the plain data both sides agree on.
 ## Roadmap (post-MVP)
 
 - Upload an existing signature PNG instead of drawing one — a `FileReader.readAsDataURL` away, since everything downstream already speaks data URLs
-- Rotated-page support (`/Rotate` 90/180/270), which needs the placement remapped per case and `rotate:` passed to `drawImage`
-- Multiple signatures / initials / date stamps
-- Saved signature library (localStorage)
+- Multiple signatures, initials and date stamps — now Milestone 6 rather than a someday item
+- Persisting the signature library across visits (localStorage), which Milestone 6's `Signature[]` is the shape for
+- Typed rather than rasterized dates (`page.drawText`), for a date a machine can read back
 - Multi-party signing and cloud archive (would require a small Node/Express backend + object storage such as S3/R2 — deliberately out of scope for the MVP)
 
 ## License
